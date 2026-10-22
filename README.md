@@ -29,6 +29,7 @@ can never be double-booked.
 | **Rooms & inventory** | Rooms, room types, amenities, photographs (validated uploads), operational status (active / maintenance / out of service / retired), search & filters, availability for `[checkIn, checkOut)`, calendar of booked nights, admin inventory views and audit trail |
 | **Dynamic pricing** | Deterministic engine: base × weekend × season × demand (own occupancy), clamped to min/max, per-night breakdown, service fee and tax, `BigDecimal` HALF_UP rounding, versioned immutable policies, price snapshot stored with every booking |
 | **Bookings** | Idempotent creation (`Idempotency-Key`), temporary inventory hold, authoritative price check, payment initiation, saga confirmation via payment events, cancellation policy (100% / 50% / 0%), auditable status history, recovery job for stuck/expired bookings |
+| **Events & e-mail** | RabbitMQ topic exchange with transactional outboxes in booking and payment services, publisher confirms, per-consumer queues with dead-letter queues and retries; notification-service sends HTML e-mails (confirmation, payment receipt, cancellation, failed payment, expired hold), suppressing duplicates when an event is redelivered; captured locally by Mailpit |
 | **Payments** | Explicit state machine, simulated provider behind a provider interface, idempotent charges, HMAC-signed timestamped webhooks with de-duplication, refunds (partial/full), reconciliation of timed-out charges, transactional outbox to the booking service |
 | **Security** | RS256 JWT (JWKS), rotating refresh tokens in an HttpOnly SameSite=Strict cookie with reuse detection, BCrypt, account lockout, gateway rate limiting, CORS allow-list, roles (CUSTOMER / STAFF / ADMIN / SERVICE), ownership checks returning 404, service-to-service client credentials, no public admin creation |
 | **Platform** | Spring Cloud Gateway, Eureka discovery + client-side load balancing, correlation IDs end-to-end, RFC 9457 problem responses, health/readiness probes, Prometheus metrics, Flyway migrations, Docker Compose, GitHub Actions CI |
@@ -188,8 +189,10 @@ Details, coverage of scenarios and the exact verification log: [docs/testing/TES
 | API gateway | http://localhost:8080/api/v1 | the only public API entry point |
 | Swagger UI (all services) | http://localhost:8080/swagger-ui.html | development only (`API_DOCS_ENABLED`) |
 | Eureka dashboard | http://localhost:8761 | loopback only, HTTP Basic (`EUREKA_USERNAME`/`EUREKA_PASSWORD` from `.env`) |
-| PostgreSQL (one server per service) | auth 5433 · room 5434 · booking 5435 · payment 5436 | loopback only, per-service credentials in `.env` |
-| Services (internal network only) | auth 8081 · room 8082 · booking 8083 · payment 8084 | not published to the host |
+| PostgreSQL (one server per service) | auth 5433 · room 5434 · booking 5435 · payment 5436 · notification 5437 | loopback only, per-service credentials in `.env` |
+| RabbitMQ management UI | http://localhost:15672 | loopback only, `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` from `.env` |
+| Mailpit (captured e-mails) | http://localhost:8025 | loopback only; every e-mail the platform sends lands here |
+| Services (internal network only) | auth 8081 · room 8082 · booking 8083 · payment 8084 · notification 8085 | not published to the host |
 
 ## Accounts
 
@@ -238,7 +241,7 @@ More (database, Eureka, routing, stuck holds, payments, migrations):
 * The payment provider is **simulated**; integrating a real provider means implementing `PaymentProvider`
   (and its webhook signature scheme). No real money or card data is ever handled.
 * Gateway rate limiting is in-memory (correct for one gateway instance; use Redis-backed limiting for several).
-* No e-mail notifications and no message broker (payment events use an HTTP outbox relay).
+* E-mails go to a local Mailpit inbox only; no real e-mail provider is configured.
 * No cloud deployment has been performed (a deployment path is documented); the CI workflow has not been run on GitHub.
 * Gateway and Eureka were run as single instances; multi-instance was verified for room-service only.
 * Responsive layout verified by browser emulation at 375–1440 px, not on physical devices.

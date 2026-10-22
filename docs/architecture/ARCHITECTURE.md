@@ -38,28 +38,40 @@ flowchart LR
     room[room-service]
     booking[booking-service]
     payment[payment-service]
+    notif[notification-service]
   end
   eureka[(discovery-server<br/>Eureka)]
-  pg[(PostgreSQL<br/>4 databases)]
+  mq{{RabbitMQ<br/>exchange grandvista.events}}
+  smtp[Mailpit<br/>SMTP · local inbox]
 
   nginx -->|/api/*| gw
   gw -->|lb://auth-service| auth
   gw -->|lb://room-service| room
   gw -->|lb://booking-service| booking
   gw -->|lb://payment-service| payment
+  gw -->|lb://notification-service<br/>admin only| notif
 
   booking -->|"POST /internal/v1/holds<br/>confirm · release"| room
   booking -->|"POST /internal/v1/payments<br/>cancel · refunds"| payment
-  payment -->|"POST /internal/v1/payment-events<br/>(outbox relay)"| booking
+  payment -->|"payment.* (outbox)"| mq
+  booking -->|"booking.* (outbox)"| mq
+  mq -->|booking.payment-events| booking
+  mq -->|notification.events| notif
+  notif -->|SMTP| smtp
   booking & payment -->|client credentials| auth
-  gw & room & booking & payment -->|JWKS| auth
+  gw & room & booking & payment & notif -->|JWKS| auth
 
-  auth & room & booking & payment & gw -. register/fetch .-> eureka
-  auth --- pg
-  room --- pg
-  booking --- pg
-  payment --- pg
+  auth & room & booking & payment & notif & gw -. register/fetch .-> eureka
+  auth --- d1[(auth-db)]
+  room --- d2[(room-db)]
+  booking --- d3[(booking-db)]
+  payment --- d4[(payment-db)]
+  notif --- d5[(notification-db)]
 ```
+
+Each service owns a **separate PostgreSQL server** (container, volume, credentials); no service can connect to
+another service's database (`scripts/verify-db-isolation.sh`). Data crosses service boundaries only through
+REST APIs and events.
 
 | Component | Responsibility | Owns |
 |---|---|---|
@@ -68,8 +80,9 @@ flowchart LR
 | **discovery-server** | Eureka registry (HTTP Basic protected); services register, gateway and services discover each other | — |
 | **auth-service** | Registration, login, account lockout, RS256 access tokens + JWKS, rotating refresh tokens, roles, user administration, client-credentials tokens for services, bootstrap administrator | `grandvista_auth` |
 | **room-service** | Room catalogue, room types, amenities, photos (media store), search & availability, **inventory holds/allocations**, **dynamic pricing** and policy versions, inventory audit trail, occupancy statistics | `grandvista_room` |
-| **booking-service** | Reservations and their lifecycle; **orchestrates the booking saga**; cancellation policy; payment-event inbox; recovery of stuck bookings | `grandvista_booking` |
-| **payment-service** | Payments and their state machine, provider abstraction + simulated provider, idempotent charges, webhooks, refunds, reconciliation, **transactional outbox** | `grandvista_payment` |
+| **booking-service** | Reservations and their lifecycle; **orchestrates the booking saga**; cancellation policy; payment-event inbox (RabbitMQ consumer); booking-event outbox; recovery of stuck bookings | `grandvista_booking` |
+| **payment-service** | Payments and their state machine, provider abstraction + simulated provider, idempotent charges, webhooks, refunds, reconciliation, **transactional outbox** publishing `payment.*` events | `grandvista_payment` |
+| **notification-service** | Consumes booking and payment events; keeps a local read model of booking contacts; sends HTML e-mails (Thymeleaf) at most once per event and type; staff API listing sent e-mails | `grandvista_notification` |
 | **platform-commons** | Shared library (not a service): correlation-ID filter, RFC 9457 errors, JWT validation wiring, service-token client, bounded retry, specification helpers. Contains no business logic. | — |
 
 ### Decision ownership
@@ -103,23 +116,49 @@ flowchart LR
   forwards it on outbound calls and stores it with outbox events, so one request can be followed through all
   logs (verified: the same ID appears in gateway, booking-service and room-service logs).
 
-## 4. Asynchronous communication
+## 4. Asynchronous communication (RabbitMQ)
 
-Payment outcomes reach the booking-service **asynchronously** through a **transactional outbox**:
+Domain events travel through **RabbitMQ** (topic exchange `grandvista.events`), always written to a
+**transactional outbox** first:
 
-1. When a payment becomes `SUCCEEDED` or `FAILED`, the payment-service writes an `outbox_events` row **in the
-   same transaction** as the state change — the event can't be lost or published for a rolled-back change.
-2. `OutboxRelay` (every 2 s) claims one due event with `FOR UPDATE SKIP LOCKED`, POSTs it to
-   `booking-service /internal/v1/payment-events`, and marks it `SENT`. Failures back off exponentially (2 s …
-   5 min); a 4xx (contract rejection) dead-letters the event; after 25 attempts the event is `DEAD` and shows
-   on the admin dashboard.
-3. The booking-service consumer is **idempotent**: it records processed event ids in `processed_events`
-   inside the same transaction as the booking transition; duplicates return `DUPLICATE`.
+```mermaid
+sequenceDiagram
+  participant P as payment-service
+  participant B as booking-service
+  participant X as RabbitMQ (grandvista.events)
+  participant N as notification-service
+  participant M as Mailpit (SMTP)
+  P->>P: payment SUCCEEDED + outbox row (one transaction)
+  P->>X: publish payment.succeeded (publisher confirm, mandatory)
+  X->>B: queue booking.payment-events
+  B->>B: inbox check → confirm room → CONFIRMED + outbox row
+  B->>X: publish booking.confirmed
+  X->>N: queue notification.events (payment.* and booking.*)
+  N->>N: upsert booking contact · insert notification (event id, type) · lock
+  N->>M: send "Your stay is confirmed" and "Payment receipt"
+```
 
-**Why not RabbitMQ/Kafka?** At-least-once delivery between two services is fully provided by the outbox +
-HTTP relay + idempotent consumer, without adding a broker to operate (and to fit in a laptop's memory). The
-relay is isolated in one class, so swapping HTTP for a broker publisher is a contained change; this is listed
-as a future enhancement.
+1. **Outbox.** A payment or booking state change and its event row are committed in **one transaction**, so an
+   event can't be lost or published for a rolled-back change. Events: `BOOKING_CREATED`, `BOOKING_CONFIRMED`,
+   `BOOKING_CANCELLED`, `HOLD_EXPIRED` (booking-service) and `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED`
+   (payment-service). Contracts: [contracts/README.md](../../contracts/README.md#events-on-rabbitmq).
+2. **Relay.** Each producer's relay claims one due row with `FOR UPDATE SKIP LOCKED` (safe with several
+   replicas), publishes it as a persistent message with **publisher confirms** and `mandatory=true`, and marks it
+   `SENT`. If the broker is down, refuses the message, or no queue is bound yet, the row stays `PENDING` with
+   exponential backoff (up to 5 min); after 25 attempts it is `DEAD` and visible in the admin payment summary.
+3. **Consumers.** Each consumer owns a durable queue with a **dead-letter queue** (`<queue>.dlq` via
+   `grandvista.events.dlx`). Failures are retried in the consumer with exponential backoff (6 attempts, 1 s → 15 s)
+   and then dead-lettered; malformed messages are dead-lettered immediately.
+4. **Idempotency.** The booking-service records processed event ids in `processed_events` in the same
+   transaction as the booking transition. The notification-service inserts `(event_id, notification_type)`
+   with `ON CONFLICT DO NOTHING`, locks that row and skips it if already `SENT`, so a duplicate delivery never
+   sends a second e-mail. The only remaining duplicate window is a crash after the SMTP server accepted an e-mail
+   but before the commit; the stable `Message-ID` lets mail clients recognise that copy.
+5. **Read model.** Payment events carry no contact data; the notification-service keeps a `booking_contacts`
+   table built from booking events (event-carried state transfer) instead of calling the booking-service.
+6. **Fallback.** The payment-service can still deliver directly over HTTP to the booking-service
+   (`GV_EVENT_TRANSPORT=http`, no broker required). Booking and payment keep working while the broker is down:
+   events wait in the outbox, and the booking recovery job reconciles unpaid bookings with the payment-service.
 
 ## 5. Booking orchestration (saga)
 

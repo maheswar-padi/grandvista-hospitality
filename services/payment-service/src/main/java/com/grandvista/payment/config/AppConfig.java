@@ -10,7 +10,15 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+import com.grandvista.payment.service.HttpOutboxPublisher;
+import com.grandvista.payment.service.OutboxPublisher;
+import com.grandvista.payment.service.RabbitOutboxPublisher;
+import com.grandvista.platform.messaging.ConfirmedRabbitPublisher;
+import com.grandvista.platform.messaging.RabbitDeclarations;
 import java.time.Clock;
+import java.time.Duration;
+import org.springframework.amqp.core.Declarables;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.autoconfigure.web.client.RestClientBuilderConfigurer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
@@ -52,6 +60,22 @@ public class AppConfig {
                 .requestInterceptor(new CorrelationIdPropagationInterceptor())
                 .requestInterceptor(new ServiceTokenInterceptor(tokens))
                 .build();
+    }
+
+    /** Event transport selected by {@code gv.payment.outbox.transport} (RABBIT by default, or HTTP). */
+    @Bean
+    OutboxPublisher outboxPublisher(PaymentProperties properties, RestClient bookingServiceClient,
+            org.springframework.beans.factory.ObjectProvider<RabbitTemplate> rabbitTemplate) {
+        if (properties.outbox().transport() == PaymentProperties.Outbox.Transport.HTTP) {
+            return new HttpOutboxPublisher(bookingServiceClient);
+        }
+        return new RabbitOutboxPublisher(new ConfirmedRabbitPublisher(rabbitTemplate.getObject(), Duration.ofSeconds(5)));
+    }
+
+    /** The producer declares the exchanges it publishes to (idempotent). Consumers declare their own queues. */
+    @Bean
+    Declarables eventExchanges() {
+        return new Declarables(RabbitDeclarations.eventsExchange(), RabbitDeclarations.deadLetterExchange());
     }
 
     @Bean

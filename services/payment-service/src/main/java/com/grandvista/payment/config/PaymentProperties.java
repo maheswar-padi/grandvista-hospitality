@@ -14,7 +14,7 @@ public record PaymentProperties(
 
     public PaymentProperties {
         webhookTolerance = webhookTolerance == null ? Duration.ofMinutes(5) : webhookTolerance;
-        outbox = outbox == null ? new Outbox(null, 0, null, null) : outbox;
+        outbox = outbox == null ? new Outbox(null, null, 0, null, null) : outbox;
         reconciliation = reconciliation == null ? new Reconciliation(null) : reconciliation;
         simulator = simulator == null ? new Simulator(true, null, null) : simulator;
     }
@@ -24,9 +24,17 @@ public record PaymentProperties(
         return "PaymentProperties[webhookSecret=***, outbox=" + outbox + ", simulator=" + simulator + "]";
     }
 
-    /** Delivery of payment events to the booking-service. */
-    public record Outbox(String bookingServiceUrl, int maxAttempts, Duration maxBackoff, Duration httpTimeout) {
+    /**
+     * Delivery of payment events. {@code RABBIT} (default) publishes to the {@code grandvista.events} exchange,
+     * where the booking- and notification-services consume them; {@code HTTP} posts directly to the
+     * booking-service (no broker required).
+     */
+    public record Outbox(Transport transport, String bookingServiceUrl, int maxAttempts, Duration maxBackoff,
+                         Duration httpTimeout) {
+        public enum Transport { RABBIT, HTTP }
+
         public Outbox {
+            transport = transport == null ? Transport.RABBIT : transport;
             bookingServiceUrl = bookingServiceUrl == null ? "http://booking-service" : bookingServiceUrl;
             maxAttempts = maxAttempts <= 0 ? 25 : maxAttempts;
             maxBackoff = maxBackoff == null ? Duration.ofMinutes(5) : maxBackoff;

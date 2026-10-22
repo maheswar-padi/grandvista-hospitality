@@ -84,6 +84,22 @@ SELECT status, attempts, last_error, next_attempt_at FROM outbox_events WHERE ag
 * Webhook `401 INVALID_SIGNATURE` → `PAYMENT_WEBHOOK_SECRET` differs between provider and service, or clock skew
   > 5 min.
 
+### Events, RabbitMQ and e-mail
+
+* Management UI: http://localhost:15672 (loopback only; user `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` from `.env`).
+  Queues: `booking.payment-events`, `notification.events` and their `.dlq` dead-letter queues. All should be at 0
+  messages with 2 consumers each on the main queues.
+* Captured e-mails: http://localhost:8025 (Mailpit). Sent-e-mail log for staff: `GET /api/v1/admin/notifications`.
+* Messages in a `.dlq`: open the queue in the UI → *Get messages* to read the payload and the `x-death` header
+  (reason, original queue, count). Fix the cause, then replay by publishing the payload to exchange
+  `grandvista.events` with the original routing key (consumers are idempotent, so replaying is safe).
+* Producer backlog: `SELECT event_type, status, attempts, last_error FROM outbox_events WHERE status <> 'SENT';` in
+  the booking or payment database. `PENDING` with `last_error = unroutable…` means a consumer queue does not
+  exist yet (start that consumer); `broker unavailable` means RabbitMQ is down — events are kept and published
+  when it returns.
+* A payment event dead-lettered by the booking-service is also recovered by the booking recovery job, which
+  checks the payment-service directly for bookings still awaiting payment after their hold expiry.
+
 ### Stuck inventory holds
 Holds past their expiry that the sweeper hasn't processed (should be empty within ~30 s):
 ```sql

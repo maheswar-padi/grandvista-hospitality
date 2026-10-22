@@ -8,5 +8,6 @@
   "amount": 19178.21,
   "currency": "INR",
   "failureCode": null,
+  "provider": "SIMULATED",
   "occurredAt": "2026-11-01T10:02:00Z"
 }

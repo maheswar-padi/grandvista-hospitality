@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<body>
+<table th:fragment="stay" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e7e2da;border-radius:6px;margin:8px 0 16px;font-size:14px;">
+  <tr th:if="${roomName}"><td style="padding:10px 14px;color:#6b6762;width:40%;">Room</td>
+    <td style="padding:10px 14px;"><span th:text="${roomName}">Room</span><span th:if="${roomTypeName}" style="color:#8a857e;"> · <span th:text="${roomTypeName}">Type</span></span></td></tr>
+  <tr th:if="${checkIn}"><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">Check-in</td>
+    <td style="padding:10px 14px;border-top:1px solid #f0ece6;" th:text="${checkIn}">Mon, 1 Jan 2027</td></tr>
+  <tr th:if="${checkOut}"><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">Check-out</td>
+    <td style="padding:10px 14px;border-top:1px solid #f0ece6;" th:text="${checkOut}">Wed, 3 Jan 2027</td></tr>
+  <tr th:if="${nights}"><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">Nights · guests</td>
+    <td style="padding:10px 14px;border-top:1px solid #f0ece6;"><span th:text="${nights}">2</span> · <span th:text="${guests}">2</span></td></tr>
+</table>
+</body>
+</html>

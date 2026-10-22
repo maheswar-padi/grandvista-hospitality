@@ -7,6 +7,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 BASE="${1:-http://localhost:8080}"
+# Mailpit captures the platform's e-mails locally; set MAILPIT_URL= (empty) to skip the e-mail checks.
+MAILPIT="${MAILPIT_URL-http://localhost:8025}"
 API="$BASE/api/v1"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -56,13 +58,26 @@ poll_status() { # poll_status <bookingId> <token> <wanted> [seconds]
   echo "$status"
 }
 
+mail_count() { # mail_count <recipient> <subject> -> number of matching e-mails in Mailpit
+  curl -s -G "$MAILPIT/api/v1/search" --data-urlencode "query=to:\"$1\" subject:\"$2\"" | jq -r '.messages_count // 0'
+}
+await_mail() { # await_mail <recipient> <subject> [seconds] -> prints the count once >= 1 (or 0 on timeout)
+  local deadline=$((SECONDS + ${3:-30})) n=0
+  while (( SECONDS < deadline )); do
+    n=$(mail_count "$1" "$2")
+    (( n >= 1 )) && break
+    sleep 1
+  done
+  echo "$n"
+}
+
 section "0. Platform health"
 # Containers report healthy before Eureka has propagated every instance to the gateway (up to ~30 s after a
 # fresh start). Wait until each public route is served, so the checks below test behaviour, not start-up timing.
 wait_ready() {
   local deadline=$((SECONDS + ${READY_TIMEOUT:-180})) path code
   # The per-service API-docs routes are public and reach each service through Eureka.
-  for path in auth-service room-service booking-service payment-service; do
+  for path in auth-service room-service booking-service payment-service notification-service; do
     while :; do
       code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api-docs/$path")
       [[ "$code" != "503" && "$code" != "000" && "$code" != "502" && "$code" != "504" ]] && break
@@ -110,6 +125,7 @@ BOOKING_BODY="${BODY_NO_TOTAL%\}},\"expectedTotal\":$TOTAL}"
 check "booking created" "201" "$(http POST /bookings "$BOOKING_BODY" "$TOKEN_A" -H "Idempotency-Key: $KEY")"
 BOOKING_ID=$(field .id)
 PAYMENT_ID=$(field .paymentId)
+REF_A=$(field .reference)
 check "booking awaits payment" "PENDING_PAYMENT" "$(field .status)"
 check "price snapshot stored" "$TOTAL" "$(field .price.total)"
 check "retry with same key returns the same booking" "200" "$(http POST /bookings "$BOOKING_BODY" "$TOKEN_A" -H "Idempotency-Key: $KEY")"
@@ -135,6 +151,13 @@ check "booking becomes CONFIRMED (via outbox event)" "CONFIRMED" "$(poll_status 
 http GET /bookings/my "" "$TOKEN_A" >/dev/null
 check "booking appears in customer history" "true" "$(jq --arg id "$BOOKING_ID" '[.content[].id] | index($id) != null' "$WORK/body")"
 
+if [[ -n "$MAILPIT" ]]; then
+  section "6b. E-mail notifications (RabbitMQ → notification-service → Mailpit)"
+  EMAIL_A=$(http GET /auth/me "" "$TOKEN_A" >/dev/null; field .email)
+  check "confirmation e-mail delivered" "1" "$(await_mail "$EMAIL_A" "Your stay is confirmed — $REF_A")"
+  check "payment receipt e-mail delivered" "1" "$(await_mail "$EMAIL_A" "Payment receipt — $REF_A")"
+fi
+
 section "7. Cancellation, refund and inventory release"
 http GET "/bookings/$BOOKING_ID/cancellation-quote" "" "$TOKEN_A" >/dev/null
 check "far-future stay gets a full refund quote" "100" "$(field .refundPercent)"
@@ -145,6 +168,9 @@ http GET "/payments/by-booking/$BOOKING_ID" "" "$TOKEN_A" >/dev/null
 check "payment is REFUNDED" "REFUNDED" "$(field .status)"
 http GET "/rooms/$ROOM_ID/availability?checkIn=$CHECK_IN&checkOut=$CHECK_OUT" "" >/dev/null
 check "room is available again" "true" "$(field .available)"
+if [[ -n "$MAILPIT" ]]; then
+  check "cancellation e-mail delivered (once)" "1" "$(await_mail "$EMAIL_A" "Your booking has been cancelled — $REF_A")"
+fi
 
 section "8. Failed payment releases the hold"
 KEY2="e2e-fail-$RANDOM$RANDOM"
@@ -152,8 +178,13 @@ check "second booking created" "201" "$(http POST /bookings "$BODY_NO_TOTAL" "$T
 B2=$(field .id); P2=$(field .paymentId)
 check "declined card fails" "FAILED" "$(http POST "/payments/$P2/confirm" '{"paymentMethodToken":"sim_card_declined"}' "$TOKEN_B" -H "Idempotency-Key: e2e-d-$RANDOM$RANDOM" >/dev/null; field .status)"
 check "booking becomes PAYMENT_FAILED" "PAYMENT_FAILED" "$(poll_status "$B2" "$TOKEN_B" PAYMENT_FAILED)"
+REF_B2=$(http GET "/bookings/$B2" "" "$TOKEN_B" >/dev/null; field .reference)
 http GET "/rooms/$ROOM_ID/availability?checkIn=$CHECK_IN&checkOut=$CHECK_OUT" "" >/dev/null
 check "room released after failure" "true" "$(field .available)"
+if [[ -n "$MAILPIT" ]]; then
+  EMAIL_B=$(http GET /auth/me "" "$TOKEN_B" >/dev/null; field .email)
+  check "payment-failed e-mail delivered" "1" "$(await_mail "$EMAIL_B" "Your payment was not completed — $REF_B2")"
+fi
 
 section "9. Asynchronous payment confirmed by signed webhook"
 KEY3="e2e-async-$RANDOM$RANDOM"

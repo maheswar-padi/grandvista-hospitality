@@ -45,15 +45,18 @@ node scripts/load-test.mjs --vus 20 --duration 30 --contenders 10
 ```
 Start the gateway with `GV_API_RATE_LIMIT=1000000 GV_AUTH_RATE_LIMIT=1000` for a throughput run.
 
-## 3. Backend results — `mvn -B clean verify` (22 Oct 2026): **148 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
+## 3. Backend results — `mvn -B clean verify` (22 Oct 2026, after Phase 2): **165 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
+
+The baseline (before Phases 1–2) was 148 tests. New classes are marked *(new)*.
 
 | Module | Test class | Tests |
 |---|---|---|
 | platform-commons | RetrierTest | 4 |
 | | CorrelationIdTest | 2 |
+| | EventTopologyTest *(new)* | 2 |
 | discovery-server | DiscoveryServerApplicationTests | 2 |
 | api-gateway | GatewayIntegrationTest | 9 |
-| auth-service | AuthFlowIntegrationTest | 11 |
+| auth-service | AuthFlowIntegrationTest (+ demo accounts) | 12 |
 | | UserAccountTest | 3 |
 | | ServiceClientAuthenticatorTest | 3 |
 | room-service | RoomInventoryIntegrationTest | 14 |
@@ -66,11 +69,16 @@ Start the gateway with `GV_API_RATE_LIMIT=1000000 GV_AUTH_RATE_LIMIT=1000` for a
 | | BookingRecoverySchedulingTest | 1 |
 | | DownstreamContractTest | 5 |
 | | BookingRulesTest | 24 |
+| | BookingMessagingIntegrationTest *(new; real RabbitMQ)* | 3 |
 | payment-service | PaymentFlowIntegrationTest | 15 |
 | | PaymentStatusTest | 18 |
 | | WebhookSignatureTest | 2 |
 | | OutboxRelayContractTest | 3 |
-| **Total** | | **148** |
+| | RabbitOutboxPublisherIntegrationTest *(new; real RabbitMQ)* | 3 |
+| notification-service *(new)* | NotificationFlowIntegrationTest (real RabbitMQ + Mailpit + PostgreSQL) | 4 |
+| | EmailComposerTest | 2 |
+| | EventContractTest | 2 |
+| **Total** | | **165** |
 
 ### Scenario coverage (selected)
 

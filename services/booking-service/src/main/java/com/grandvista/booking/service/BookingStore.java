@@ -30,13 +30,15 @@ public class BookingStore {
     private final BookingRepository bookings;
     private final ProcessedEventRepository processedEvents;
     private final ObjectMapper objectMapper;
+    private final BookingEventRecorder events;
     private final Clock clock;
 
     public BookingStore(BookingRepository bookings, ProcessedEventRepository processedEvents, ObjectMapper objectMapper,
-            Clock clock) {
+            BookingEventRecorder events, Clock clock) {
         this.bookings = bookings;
         this.processedEvents = processedEvents;
         this.objectMapper = objectMapper;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -76,6 +78,7 @@ public class BookingStore {
         b.attachPayment(paymentId, clock.instant());
         if (b.getStatus() == BookingStatus.CREATED) {
             b.transitionTo(BookingStatus.PENDING_PAYMENT, "inventory held; awaiting payment", actor, clock.instant());
+            events.onTransition(b);
         }
         return b;
     }
@@ -93,6 +96,7 @@ public class BookingStore {
                 b.setRefundAmount(refundAmount);
             }
             b.transitionTo(target, reason, actor, clock.instant());
+            events.onTransition(b);
         }
         if (event != null && !processedEvents.existsById(event.eventId())) {
             processedEvents.save(new ProcessedEvent(event.eventId(), event.eventType(), bookingId, clock.instant()));

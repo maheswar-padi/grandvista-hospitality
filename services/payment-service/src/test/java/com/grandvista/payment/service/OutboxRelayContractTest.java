@@ -48,14 +48,14 @@ class OutboxRelayContractTest {
     void setUp() throws Exception {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://booking-service");
         server = MockRestServiceServer.bindTo(builder).build();
-        relay = new OutboxRelay(repository, builder.build(), new PaymentProperties(null, null, null, null, null),
+        relay = new OutboxRelay(repository, new HttpOutboxPublisher(builder.build()), new PaymentProperties(null, null, null, null, null),
                 mock(TransactionTemplate.class), clock);
 
         Payment payment = new Payment(UUID.randomUUID(), "GV-ABC123", UUID.randomUUID(), new BigDecimal("10584.00"),
                 "INR", "SIMULATED", clock.instant().plus(Duration.ofMinutes(15)), clock.instant());
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         var message = new OutboxService.PaymentEventMessage(UUID.randomUUID(), "PAYMENT_SUCCEEDED", 1, payment.getId(),
-                payment.getBookingId(), "SUCCEEDED", payment.getAmount(), "INR", null, clock.instant());
+                payment.getBookingId(), "SUCCEEDED", payment.getAmount(), "INR", null, "SIMULATED", clock.instant());
         event = new OutboxEvent(message.eventId(), payment.getId(), "PAYMENT_SUCCEEDED", mapper.writeValueAsString(message),
                 "corr-id-12345678", clock.instant());
         when(repository.claimNext(any())).thenReturn(List.of(event));

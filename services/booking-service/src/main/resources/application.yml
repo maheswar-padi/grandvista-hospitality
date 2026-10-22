@@ -29,6 +29,26 @@ spring:
         default_batch_fetch_size: 50
   flyway:
     enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: 5s
+    listener:
+      simple:
+        # Failed messages are retried in the consumer with exponential backoff, then rejected without requeue,
+        # which routes them to the queue's dead-letter queue (booking.payment-events.dlq).
+        default-requeue-rejected: false
+        prefetch: 10
+        retry:
+          enabled: true
+          max-attempts: 6
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 15s
 
 eureka:
   client:
@@ -59,6 +79,12 @@ gv:
       full-refund-days: 7
       partial-refund-days: 2
       partial-refund-percent: 50
+    events:
+      publish-enabled: ${GV_EVENTS_PUBLISH_ENABLED:true}
+      consume-enabled: ${GV_EVENTS_CONSUME_ENABLED:true}
+      relay-interval: 1s
+      max-attempts: 25
+      max-backoff: 5m
     recovery:
       interval: 30s
       stuck-threshold: 2m
@@ -84,6 +110,10 @@ management:
     # into the health that eureka.client.healthcheck publishes creates an UP/DOWN loop, so it is excluded;
     # Eureka then reflects real dependencies (database, disk).
     eureka:
+      enabled: false
+    # Bookings keep working while the broker is down (events wait in the outbox, the recovery job reconciles
+    # payments), so the broker must not mark this instance DOWN in Eureka.
+    rabbit:
       enabled: false
   endpoints:
     web:

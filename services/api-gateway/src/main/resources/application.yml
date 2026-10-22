@@ -31,6 +31,10 @@ spring:
               uri: ${GV_ROUTE_PAYMENT:lb://payment-service}
               predicates:
                 - Path=/api/v1/payments/**,/api/v1/admin/payments/**
+            - id: notifications
+              uri: ${GV_ROUTE_NOTIFICATION:lb://notification-service}
+              predicates:
+                - Path=/api/v1/admin/notifications,/api/v1/admin/notifications/**
             # Aggregated OpenAPI documents for the gateway's Swagger UI (development only).
             - id: docs-auth
               uri: ${GV_ROUTE_AUTH:lb://auth-service}
@@ -54,6 +58,12 @@ spring:
               uri: ${GV_ROUTE_PAYMENT:lb://payment-service}
               predicates:
                 - Path=/api-docs/payment-service
+              filters:
+                - SetPath=/v3/api-docs
+            - id: docs-notification
+              uri: ${GV_ROUTE_NOTIFICATION:lb://notification-service}
+              predicates:
+                - Path=/api-docs/notification-service
               filters:
                 - SetPath=/v3/api-docs
 
@@ -95,6 +105,8 @@ springdoc:
         url: /api-docs/booking-service
       - name: payment-service
         url: /api-docs/payment-service
+      - name: notification-service
+        url: /api-docs/notification-service
 
 management:
   endpoints:

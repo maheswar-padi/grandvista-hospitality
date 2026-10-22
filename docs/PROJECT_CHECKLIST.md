@@ -41,6 +41,10 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
       `scripts/verify-db-isolation.sh` 28/28; fresh volumes → stack healthy → e2e 52/52
 - [x] Demo customer and staff accounts seeded from `.env` (`demoAccountsAreSeededWithTheirRolesOnly`)
 
+## Message broker and e-mail (Phase 2, 22 Oct 2026)
+- [x] RabbitMQ events with outboxes, publisher confirms, DLQs and idempotent consumers (real-broker tests)
+- [x] notification-service + Mailpit; e-mails verified by `NotificationFlowIntegrationTest` and e2e (56/56)
+
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
   exclusion-constraint deadlock (per-room row lock) · LocalDate JSON as arrays in load-balanced clients ·
@@ -61,5 +65,5 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 ## Not done / limitations
 - Real payment provider (simulated only) · cloud deployment (none performed) · CI workflow never run on GitHub ·
   in-memory gateway rate limiting; gateway and Eureka not run as multiple instances ·
-  no e-mail notifications or message broker · responsive checks by emulation only ·
+  e-mails captured by Mailpit only (no real provider) · responsive checks by emulation only ·
   not yet pushed to a remote

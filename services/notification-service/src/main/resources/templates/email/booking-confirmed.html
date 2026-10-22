@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:replace="~{email/layout :: frame(~{::content})}">
+<body>
+<div th:fragment="content">
+  <p style="margin:0 0 12px;">Thank you — your payment was received and your room is reserved.</p>
+  <table th:replace="~{email/stay-details :: stay}"></table>
+  <p style="margin:0 0 20px;font-size:16px;">Total paid: <strong th:text="${total}">₹10,584.00</strong></p>
+  <a th:href="${manageUrl}" style="display:inline-block;background:#1f3a34;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;">View or manage your booking</a>
+  <p style="margin:20px 0 0;font-size:13px;color:#6b6762;">Free cancellation up to 7 days before check-in; 50% refund 2–6 days before; no refund within 48 hours.</p>
+</div>
+</body>
+</html>

@@ -76,6 +76,8 @@ public final class BookingDtos {
     }
 
     /** Versioned payment event contract published by the payment-service outbox. */
+    /** Consumers ignore unknown fields so producers can add fields without a new schema version. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public record PaymentEventMessage(
             @NotNull UUID eventId,
             @NotBlank @Pattern(regexp = "^[A-Z_]{3,40}$") String eventType,

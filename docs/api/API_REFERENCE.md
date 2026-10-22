@@ -55,9 +55,11 @@ Common codes: `VALIDATION_FAILED` (400), `AUTHENTICATION_REQUIRED` (401), `ACCES
 | `rooms` | `/api/v1/rooms/**`, `/api/v1/room-types/**`, `/api/v1/amenities/**`, `/api/v1/media/**`, `/api/v1/admin/rooms/**`, `/api/v1/admin/room-types/**`, `/api/v1/admin/amenities/**`, `/api/v1/admin/pricing/**`, `/api/v1/admin/inventory/**` | `lb://room-service` |
 | `bookings` | `/api/v1/bookings`, `/api/v1/bookings/**`, `/api/v1/admin/bookings/**` | `lb://booking-service` |
 | `payments` | `/api/v1/payments/**`, `/api/v1/admin/payments/**` | `lb://payment-service` |
-| `docs-*` | `/api-docs/{auth,room,booking,payment}-service` → `/v3/api-docs` | each service (development only) |
+| `notifications` | `/api/v1/admin/notifications` | `lb://notification-service` |
+| `docs-*` | `/api-docs/{auth,room,booking,payment,notification}-service` → `/v3/api-docs` | each service (development only) |
 
-Targets can be overridden with `GV_ROUTE_AUTH`, `GV_ROUTE_ROOM`, `GV_ROUTE_BOOKING`, `GV_ROUTE_PAYMENT` (e.g. a
+Targets can be overridden with `GV_ROUTE_AUTH`, `GV_ROUTE_ROOM`, `GV_ROUTE_BOOKING`, `GV_ROUTE_PAYMENT`,
+`GV_ROUTE_NOTIFICATION` (e.g. a
 direct URL when running without Eureka). Anything else — including `/internal/**` and service actuators — returns
 404 at the gateway. Edge rules: public `GET` catalogue paths and the credential/webhook `POST`s are anonymous;
 `/api/v1/admin/**` requires `STAFF` or `ADMIN`; every other `/api/v1/**` path requires a valid token. Services
@@ -160,6 +162,23 @@ Simulated test tokens: `sim_card_success`, `sim_card_success_mastercard` (approv
 `sim_card_insufficient_funds` (declined), `sim_card_async_success`, `sim_card_async_decline` (decided by a signed
 webhook ~3 s later), `sim_card_timeout_success` (approved, but the response is "lost"; the reconciliation job
 resolves it within about a minute). Any other token is declined with `invalid_payment_method`.
+
+### 3.5 notification-service
+
+| Method | Path | Purpose | Role | Request / success | Important failures |
+|---|---|---|---|---|---|
+| GET | `/admin/notifications?bookingId&page&size` | E-mails sent, newest first (optionally for one booking) | STAFF, ADMIN | page of `{id, type, eventId, bookingId, bookingReference, recipient, subject, status, createdAt, sentAt}` | 401, 403 |
+
+The service has no other HTTP API: it is driven by RabbitMQ events (see [contracts/README.md](../../contracts/README.md#events-on-rabbitmq)).
+E-mail types: `BOOKING_CONFIRMED`, `PAYMENT_RECEIPT`, `BOOKING_CANCELLED`, `PAYMENT_FAILED`, `HOLD_EXPIRED`.
+Locally every e-mail is captured by Mailpit (http://localhost:8025); nothing reaches real mailboxes.
+
+### 3.6 Events (RabbitMQ, not HTTP)
+
+| Routing key | Producer | Payload |
+|---|---|---|
+| `booking.created`, `booking.confirmed`, `booking.cancelled`, `booking.hold-expired` | booking-service | [booking-event.json](../../contracts/booking-service/booking-event.json) |
+| `payment.succeeded`, `payment.failed` | payment-service | [payment-event.json](../../contracts/payment-service/payment-event.json) (now includes `provider`) |
 
 ## 4. Worked example (curl)
 

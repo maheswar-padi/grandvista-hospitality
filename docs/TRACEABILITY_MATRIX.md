@@ -62,7 +62,7 @@ test class names refer to [TESTING.md](testing/TESTING.md) (148 backend + 24 fro
 | CI pipeline | `.github/workflows/ci.yml` | **IMPLEMENTED, NOT VERIFIED** (never run on GitHub) |
 | Dependency vulnerability checks | advisory `npm audit` + dependency review in CI | **IMPLEMENTED, NOT VERIFIED** |
 | Real payment provider integration | `PaymentProvider` interface ready; only the simulated provider exists | **EXTERNAL DEPENDENCY** (provider account) |
-| E-mail notifications | not built | **NOT IMPLEMENTED** (not required by the brief) |
-| Message broker (RabbitMQ/Kafka) | intentionally not used; outbox + HTTP relay provides at-least-once delivery (justified in ARCHITECTURE.md §4) | **NOT IMPLEMENTED** (by design) |
+| Message broker (RabbitMQ) | `platform-commons` `messaging/*`; payment `OutboxRelay` + `RabbitOutboxPublisher`; booking `BookingOutboxRelay`, `PaymentEventListener`; queues with DLQs; tests `RabbitOutboxPublisherIntegrationTest`, `BookingMessagingIntegrationTest` (real broker) | **VERIFIED** (tests + live e2e) |
+| E-mail notifications | `notification-service` (`DomainEventListener`, `NotificationService`, Thymeleaf templates), Mailpit; tests `NotificationFlowIntegrationTest` (real RabbitMQ + Mailpit), `EmailComposerTest`; e2e section 6b and checks for cancellation/failed-payment e-mails | **VERIFIED** (tests + live e2e) |
 | Multi-instance gateway / shared rate limiting | in-memory limiter | **PARTIAL** (single gateway instance) |
 | Separate database server per service | `docker-compose.yml` (`auth-db`, `room-db`, `booking-db`, `payment-db`), `infrastructure/docker/postgres/init/01-create-service-db.sh`; `scripts/verify-db-isolation.sh` (28/28 checks) | **VERIFIED (live)** |

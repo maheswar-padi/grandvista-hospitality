@@ -28,6 +28,15 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    # Each published event waits for the broker's confirm; unroutable events are returned and retried.
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: 5s
 
 eureka:
   client:
@@ -55,6 +64,8 @@ gv:
     webhook-secret: ${PAYMENT_WEBHOOK_SECRET:}
     webhook-tolerance: 5m
     outbox:
+      # RABBIT: publish to the grandvista.events exchange; HTTP: post directly to the booking-service.
+      transport: ${GV_EVENT_TRANSPORT:rabbit}
       booking-service-url: ${GV_BOOKING_SERVICE_URL:http://booking-service}
       relay-interval: 2s
       max-attempts: 25
@@ -79,6 +90,10 @@ management:
     # into the health that eureka.client.healthcheck publishes creates an UP/DOWN loop, so it is excluded;
     # Eureka then reflects real dependencies (database, disk).
     eureka:
+      enabled: false
+    # Payments keep working while the broker is down (events wait in the outbox), so the broker must not make
+    # this instance DOWN in Eureka. Outbox backlog is visible in the admin payment summary instead.
+    rabbit:
       enabled: false
   endpoints:
     web:

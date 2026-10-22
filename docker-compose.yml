@@ -12,7 +12,12 @@ x-java-service: &java-service
   deploy:
     resources:
       limits:
-        memory: 512m
+        memory: 448m
+
+x-rabbit-env: &rabbit-env
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
 
 x-eureka-env: &eureka-env
   EUREKA_URL: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka
@@ -92,6 +97,54 @@ services:
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
     ports: ["127.0.0.1:${PAYMENT_DB_HOST_PORT:-5436}:5432"]
 
+  notification-db:
+    <<: *postgres-service
+    environment:
+      <<: *postgres-env
+      SERVICE_DB: grandvista_notification
+      SERVICE_USER: grandvista_notification
+      SERVICE_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?missing}
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${NOTIFICATION_DB_HOST_PORT:-5437}:5432"]
+
+  # ---- Messaging and e-mail ----
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    networks: [grandvista]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?missing}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?missing}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infrastructure/docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/90-grandvista.conf:ro
+    # AMQP and the management UI, loopback only.
+    ports:
+      - "127.0.0.1:${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_HOST_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    deploy: { resources: { limits: { memory: 320m } } }
+
+  # Local SMTP server that captures every e-mail; nothing is delivered to real mailboxes.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    networks: [grandvista]
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports: ["127.0.0.1:${MAILPIT_UI_HOST_PORT:-8025}:8025"]
+    deploy: { resources: { limits: { memory: 64m } } }
+
   discovery-server:
     <<: *java-service
     build: { context: ., dockerfile: services/discovery-server/Dockerfile }
@@ -159,10 +212,11 @@ services:
     image: grandvista/payment-service:1.0.0
     depends_on:
       payment-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
       discovery-server: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
-      <<: *eureka-env
+      <<: [*eureka-env, *rabbit-env]
       DB_URL: jdbc:postgresql://payment-db:5432/grandvista_payment
       DB_USERNAME: grandvista_payment
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
@@ -176,16 +230,37 @@ services:
     image: grandvista/booking-service:1.0.0
     depends_on:
       booking-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
       discovery-server: { condition: service_healthy }
       auth-service: { condition: service_healthy }
       room-service: { condition: service_healthy }
       payment-service: { condition: service_healthy }
     environment:
-      <<: *eureka-env
+      <<: [*eureka-env, *rabbit-env]
       DB_URL: jdbc:postgresql://booking-db:5432/grandvista_booking
       DB_USERNAME: grandvista_booking
       DB_PASSWORD: ${BOOKING_DB_PASSWORD}
       BOOKING_SERVICE_CLIENT_SECRET: ${BOOKING_SERVICE_CLIENT_SECRET}
+
+  notification-service:
+    <<: *java-service
+    build: { context: ., dockerfile: services/notification-service/Dockerfile }
+    image: grandvista/notification-service:1.0.0
+    depends_on:
+      notification-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
+      discovery-server: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+    environment:
+      <<: [*eureka-env, *rabbit-env]
+      DB_URL: jdbc:postgresql://notification-db:5432/grandvista_notification
+      DB_USERNAME: grandvista_notification
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      GV_MAIL_FROM: ${GV_MAIL_FROM:-GrandVista Hospitality <reservations@grandvista.local>}
+      GV_PUBLIC_WEB_URL: ${GV_PUBLIC_WEB_URL:-http://localhost:3000}
 
   api-gateway:
     <<: *java-service
@@ -228,5 +303,9 @@ volumes:
     name: grandvista-booking-db-data
   payment-db-data:
     name: grandvista-payment-db-data
+  notification-db-data:
+    name: grandvista-notification-db-data
+  rabbitmq-data:
+    name: grandvista-rabbitmq-data
   room-media:
     name: grandvista-room-media

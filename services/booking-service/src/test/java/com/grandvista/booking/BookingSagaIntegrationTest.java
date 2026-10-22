@@ -189,6 +189,19 @@ class BookingSagaIntegrationTest {
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
         mvc.perform(get("/api/v1/bookings/{id}/history", id).with(customer(customerId)))
                 .andExpect(jsonPath("$[*].toStatus").value(org.hamcrest.Matchers.contains("CREATED", "PENDING_PAYMENT", "CONFIRMED")));
+
+        // transactional outbox: one event per published transition, written with the state change
+        assertThat(jdbc.queryForList("SELECT event_type FROM outbox_events WHERE aggregate_id = ? ORDER BY created_at",
+                String.class, id)).containsExactly("BOOKING_CREATED", "BOOKING_CONFIRMED");
+        assertThat(jdbc.queryForObject("SELECT payload->>'customerEmail' FROM outbox_events WHERE aggregate_id = ? "
+                + "AND event_type = 'BOOKING_CONFIRMED'", String.class, id)).isEqualTo("guest@example.test");
+
+        // provider side of contracts/booking-service/booking-event.json: every published field is present
+        JsonNode example = json.readTree(java.nio.file.Files.readString(
+                java.nio.file.Path.of("../../contracts/booking-service/booking-event.json")));
+        JsonNode actual = json.readTree(jdbc.queryForObject("SELECT payload::text FROM outbox_events WHERE aggregate_id = ? "
+                + "AND event_type = 'BOOKING_CONFIRMED'", String.class, id));
+        example.fieldNames().forEachRemaining(field -> assertThat(actual.has(field)).as("contract field %s", field).isTrue());
     }
 
     @Test

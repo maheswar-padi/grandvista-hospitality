@@ -8,18 +8,15 @@ import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 /**
- * Delivers outbox events to the booking-service (discovered through Eureka) with at-least-once semantics:
- * one event per short transaction, exponential backoff on failure, dead-lettering after the configured
- * number of attempts. A transport failure stops the current run so an unavailable consumer is not hammered.
+ * Delivers outbox events with at-least-once semantics through the configured {@link OutboxPublisher}
+ * (RabbitMQ by default, or HTTP straight to the booking-service): one event per short transaction,
+ * exponential backoff on failure, dead-lettering after the configured number of attempts. A transport failure
+ * stops the current run so an unavailable broker or consumer is not hammered.
  */
 @Component
 public class OutboxRelay {
@@ -28,21 +25,21 @@ public class OutboxRelay {
     private static final int MAX_PER_RUN = 50;
 
     private final OutboxEventRepository outbox;
-    private final RestClient bookingClient;
+    private final OutboxPublisher publisher;
     private final PaymentProperties properties;
     private final TransactionTemplate tx;
     private final Clock clock;
 
-    public OutboxRelay(OutboxEventRepository outbox, RestClient bookingServiceClient, PaymentProperties properties,
+    public OutboxRelay(OutboxEventRepository outbox, OutboxPublisher publisher, PaymentProperties properties,
             TransactionTemplate tx, Clock clock) {
         this.outbox = outbox;
-        this.bookingClient = bookingServiceClient;
+        this.publisher = publisher;
         this.properties = properties;
         this.tx = tx;
         this.clock = clock;
     }
 
-    @Scheduled(fixedDelayString = "${gv.payment.outbox.relay-interval:2s}", initialDelayString = "15s")
+    @Scheduled(fixedDelayString = "${gv.payment.outbox.relay-interval:2s}", initialDelayString = "${gv.payment.outbox.initial-delay:15s}")
     public void relay() {
         for (int i = 0; i < MAX_PER_RUN; i++) {
             Boolean delivered;
@@ -58,7 +55,7 @@ public class OutboxRelay {
         }
     }
 
-    /** @return true when an event was delivered and more may be pending; false when idle or consumer down */
+    /** @return true when an event was handled and more may be pending; false when idle or the transport is down */
     Boolean deliverNext() {
         var claimed = outbox.claimNext(clock.instant());
         if (claimed.isEmpty()) {
@@ -69,28 +66,19 @@ public class OutboxRelay {
             MDC.put(CorrelationId.MDC_KEY, event.getCorrelationId());
         }
         try {
-            bookingClient.post().uri("/internal/v1/payment-events")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(CorrelationId.HEADER, event.getCorrelationId() == null ? CorrelationId.newId() : event.getCorrelationId())
-                    .body(event.getPayload())
-                    .retrieve().toBodilessEntity();
+            publisher.publish(event);
             event.markSent(clock.instant());
-            log.info("Delivered {} for payment {} to booking-service", event.getEventType(), event.getAggregateId());
+            log.info("Delivered {} for payment {} via {}", event.getEventType(), event.getAggregateId(), publisher.name());
             return true;
-        } catch (HttpClientErrorException ex) {
-            if (ex.getStatusCode().value() == 401 || ex.getStatusCode().value() == 429) {
-                event.markFailed(ex.getStatusCode().toString(), properties.outbox().maxAttempts(),
-                        properties.outbox().maxBackoff(), clock.instant());
-            } else {
-                // A 4xx means the consumer rejected the contract: retrying the same message cannot succeed.
-                event.markDead(ex.getStatusCode() + " " + ex.getResponseBodyAsString());
-                log.error("Outbox event {} rejected by booking-service ({}); dead-lettered", event.getId(), ex.getStatusCode());
-            }
+        } catch (OutboxPublisher.RejectedDeliveryException ex) {
+            event.markDead(ex.getMessage());
+            log.error("Outbox event {} rejected by {} ({}); dead-lettered", event.getId(), publisher.name(), ex.getMessage());
             return true;
-        } catch (RestClientException | IllegalStateException ex) {
+        } catch (OutboxPublisher.RetryableDeliveryException ex) {
             event.markFailed(ex.getMessage(), properties.outbox().maxAttempts(), properties.outbox().maxBackoff(),
                     clock.instant());
-            log.warn("Outbox delivery of {} failed (attempt {}): {}", event.getId(), event.getAttempts(), ex.getMessage());
+            log.warn("Outbox delivery of {} via {} failed (attempt {}): {}", event.getId(), publisher.name(),
+                    event.getAttempts(), ex.getMessage());
             return false;
         } finally {
             MDC.remove(CorrelationId.MDC_KEY);

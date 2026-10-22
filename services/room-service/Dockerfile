@@ -13,6 +13,7 @@ COPY services/auth-service/pom.xml services/auth-service/
 COPY services/room-service/pom.xml services/room-service/
 COPY services/booking-service/pom.xml services/booking-service/
 COPY services/payment-service/pom.xml services/payment-service/
+COPY services/notification-service/pom.xml services/notification-service/
 COPY shared/platform-commons/src shared/platform-commons/src
 COPY services/room-service/src services/room-service/src
 RUN --mount=type=cache,target=/root/.m2 \
@@ -32,8 +33,10 @@ COPY --from=build --chown=app:app /workspace/extracted/snapshot-dependencies/ ./
 COPY --from=build --chown=app:app /workspace/extracted/application/ ./
 USER app
 EXPOSE 8082
+# Fewer glibc malloc arenas: lowers resident memory of a JVM with many threads by tens of MB.
+ENV MALLOC_ARENA_MAX=2
 ENV PORT=8082 \
-    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60 -XX:+UseSerialGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -Xss512k -XX:ReservedCodeCacheSize=64m -XX:MaxMetaspaceSize=192m -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
   CMD curl -fsS http://localhost:8082/actuator/health/readiness || exit 1
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

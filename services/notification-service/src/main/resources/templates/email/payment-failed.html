@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:replace="~{email/layout :: frame(~{::content})}">
+<body>
+<div th:fragment="content">
+  <p style="margin:0 0 12px;" th:text="${failureReason}">The payment could not be completed.</p>
+  <p style="margin:0 0 12px;"><strong>You have not been charged</strong> and the room has been released. You are welcome to book again.</p>
+  <table th:replace="~{email/stay-details :: stay}"></table>
+  <a th:href="${searchUrl}" style="display:inline-block;background:#1f3a34;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;">Search availability</a>
+</div>
+</body>
+</html>

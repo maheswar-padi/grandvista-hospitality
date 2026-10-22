@@ -178,7 +178,8 @@ Testing Library, axe-core; Docker Compose; GitHub Actions (configured).
 | PostgreSQL | range types and GiST exclusion constraints give a database-level double-booking guarantee |
 | Flyway | versioned, reviewable schema; services validate the schema at start-up |
 | RS256 JWT with JWKS | only the auth service can sign; services verify with a public key; supports key rotation |
-| Transactional outbox over HTTP | reliable at-least-once delivery without operating a message broker |
+| RabbitMQ + transactional outbox | durable fan-out of domain events to several consumers; the outbox makes publishing atomic with the state change |
+| Mailpit + Thymeleaf | HTML e-mails rendered from templates and captured by a local SMTP server, so no real mail is sent during development |
 | React + TypeScript + Vite | typed, component-based UI with fast builds and code splitting |
 | Testcontainers | integration tests against the real database engine and its constraints |
 | Docker Compose | reproducible multi-service environment on one machine |
@@ -190,8 +191,10 @@ frontend served by nginx, and PostgreSQL. Communication:
 
 * **Synchronous** REST over HTTP with explicit timeouts (2 s connect, 5–8 s read) and bounded retries (3
   attempts, exponential backoff with jitter) applied only to idempotent operations.
-* **Asynchronous** delivery of payment outcomes from payment to booking via the outbox relay (2 s polling,
-  exponential backoff, dead-lettering), with an idempotent consumer.
+* **Asynchronous** domain events (`BOOKING_CREATED/CONFIRMED/CANCELLED`, `HOLD_EXPIRED`, `PAYMENT_SUCCEEDED/FAILED`)
+  through RabbitMQ: producers write them to a transactional outbox and publish with publisher confirms; each
+  consumer (booking-service, notification-service) has a durable queue with retries and a dead-letter queue, and
+  de-duplicates by event id.
 * **Discovery and load balancing:** services register in Eureka; the gateway uses `lb://` routes and the booking
   and payment services use load-balanced HTTP clients. With two room-service instances, 60 gateway requests were
   served 30/30 and the booking service's internal calls 4/4 (measured).
@@ -431,7 +434,8 @@ must not contain fabricated images):
 * The system has not been deployed to a cloud platform; the CI workflow has not been executed on GitHub.
 * Gateway rate limiting is in memory (single gateway instance); Eureka and the gateway were not run in multiple
   instances.
-* No e-mail notifications; no multi-property or multi-currency support.
+* E-mails are captured by a local SMTP server (Mailpit); no real e-mail provider is configured. No multi-property
+  or multi-currency support.
 * Performance figures come from a single laptop and are not production capacity estimates.
 * Responsive testing used browser emulation, not physical devices.
 
@@ -439,7 +443,7 @@ must not contain fabricated images):
 
 1. Integrate a real payment provider (implementing the existing `PaymentProvider` interface and its webhook
    signature scheme).
-2. Replace the HTTP outbox relay with a message broker publisher (RabbitMQ or Kafka) for fan-out to new consumers.
+2. Connect a real e-mail provider (SMTP relay or API) in place of Mailpit; add SMS notifications.
 3. Redis-backed rate limiting and caching of catalogue reads; multiple gateway and Eureka instances.
 4. Cloud deployment with managed PostgreSQL, a secret manager, HTTPS and centralised logging and tracing
    (OpenTelemetry).

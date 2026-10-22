@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:replace="~{email/layout :: frame(~{::content})}">
+<body>
+<div th:fragment="content">
+  <p style="margin:0 0 12px;">Your booking has been cancelled.</p>
+  <table th:replace="~{email/stay-details :: stay}"></table>
+  <p th:if="${hasRefund}" style="margin:0 0 12px;font-size:16px;">Refund: <strong th:text="${refund}">₹5,292.00</strong>
+    <span style="font-size:13px;color:#6b6762;">— returned to your original payment method.</span></p>
+  <p th:unless="${hasRefund}" style="margin:0 0 12px;">Under the cancellation policy no refund applies to this booking.</p>
+  <a th:href="${manageUrl}" style="display:inline-block;background:#1f3a34;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;">View booking</a>
+</div>
+</body>
+</html>

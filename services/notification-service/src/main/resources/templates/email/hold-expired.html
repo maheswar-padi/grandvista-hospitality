@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:replace="~{email/layout :: frame(~{::content})}">
+<body>
+<div th:fragment="content">
+  <p style="margin:0 0 12px;">We held this room for you, but payment was not completed in time, so the reservation has expired.
+    <strong>You have not been charged</strong> and the room has been released.</p>
+  <table th:replace="~{email/stay-details :: stay}"></table>
+  <a th:href="${searchUrl}" style="display:inline-block;background:#1f3a34;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;">Search availability again</a>
+</div>
+</body>
+</html>

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 PASS=0; FAIL=0
 ok() { PASS=$((PASS + 1)); printf '  \033[32m✔\033[0m %s\n' "$1"; }
 ko() { FAIL=$((FAIL + 1)); printf '  \033[31m✘\033[0m %s\n' "$1"; }
-SERVICES=(auth room booking payment)
+SERVICES=(auth room booking payment notification)
 
 for svc in "${SERVICES[@]}"; do
   echo "${svc}-db:"
