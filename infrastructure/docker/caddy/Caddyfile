@@ -1,0 +1,33 @@
+# Public HTTPS entry point (production overlay). Caddy obtains and renews a Let's Encrypt certificate for
+# GV_DOMAIN automatically (ports 80 and 443 must be reachable from the internet). With GV_DOMAIN=localhost it
+# uses its own local CA instead (used to test this file locally).
+{
+	email {$ACME_EMAIL}
+}
+
+{$GV_DOMAIN} {
+	encode gzip
+	# API (incl. provider webhooks) and the gateway health check go straight to the gateway load balancer.
+	@api path /api/* /actuator/health
+	handle @api {
+		reverse_proxy gateway-lb:8080 {
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+	# Internal service APIs and actuators are never public (the gateway also refuses them).
+	handle /internal/* {
+		respond 404
+	}
+	# Everything else is the web application (its own nginx adds the security headers).
+	handle {
+		reverse_proxy frontend:8080
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	log {
+		output stdout
+		format console
+	}
+}

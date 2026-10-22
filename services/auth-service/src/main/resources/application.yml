@@ -125,7 +125,7 @@ gv:
     keys:
       allow-ephemeral: false
     demo-users:
-      enabled: false
+      enabled: ${GV_DEMO_SEED_ENABLED:false}
 springdoc:
   api-docs:
     enabled: false

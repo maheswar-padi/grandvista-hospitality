@@ -158,50 +158,79 @@ set -a; . ./.env; set +a; PGPASSWORD=$BOOKING_DB_PASSWORD psql -h localhost -p 5
 
 ## Cloud deployment
 
-**Status: not performed.** No cloud account, registry or credentials are configured, and the CI `deploy` job is
-disabled (`if: false`). The following is the recommended path.
+**Status: prepared, not performed.** No cloud account or credentials were available, so nothing has been
+deployed. The production overlay (`docker-compose.prod.yml`), Caddy configuration and `scripts/deploy.sh` were
+tested **on the development machine** with `GV_DOMAIN=localhost` (Caddy's local certificate authority instead of
+Let's Encrypt) — see "Local test of the production overlay" below.
 
-### Target options
+### Recommended target: one Oracle Cloud "Always Free" ARM VM
 
-| Option | Fit |
+| Option | Verdict |
 |---|---|
-| **Azure Container Apps / AWS ECS Fargate / Google Cloud Run** + managed PostgreSQL | simplest: each image becomes an app/service with health probes and secrets; Eureka can keep running as an internal app, or be replaced by the platform's service discovery |
-| **Kubernetes** (AKS/EKS/GKE) | most control; replace Eureka/LoadBalancer with Kubernetes Services (Spring Cloud Kubernetes) and the gateway's `lb://` URIs with service DNS names |
+| **Oracle Cloud Always Free — Ampere A1 VM** (up to 4 OCPU / 24 GB RAM, free indefinitely) | **Recommended.** The only free option with enough memory for the whole stack (~3 GB measured, 23 containers); runs the same Docker Compose files, so nothing changes in the code. Trade-offs: sign-up needs a card for identity verification; free A1 capacity is sometimes temporarily unavailable in a region; you operate the VM (updates, backups). |
+| AWS EC2 / Google Cloud free tier (1 GB RAM) | too small for 11 JVMs + 5 PostgreSQL servers + RabbitMQ |
+| Render / Railway / Fly.io free plans | per-service memory limits and no free multi-database/broker setup for 20+ containers |
+| Managed containers (Azure Container Apps, ECS Fargate, Cloud Run) + managed PostgreSQL | production-grade but not free; see "Production-grade alternative" |
 
-### Steps
+### What is prepared
 
-1. **Registry:** push the seven images (`grandvista/*:1.0.0`) to a private registry, tagged by commit SHA.
-2. **Database:** provision managed PostgreSQL 16 (one instance per service in production, or one server with four
-   databases for a demo); enable automated backups and point-in-time recovery; create the four owner roles (see the
-   init script); require TLS (`?sslmode=require` in `DB_URL`).
-3. **Secrets:** store every secret from `.env.example` and the JWT key pair in the platform's secret manager
-   (Key Vault / Secrets Manager / Secret Manager); never in images or plain environment files. Rotate the JWT key by
-   publishing the new public key in the JWKS before signing with it.
-4. **Configuration:** `SPRING_PROFILES_ACTIVE=prod`, `API_DOCS_ENABLED=false`, `GV_DEMO_SEED_ENABLED=false`,
-   `GV_CORS_ALLOWED_ORIGINS=https://<your-domain>`, `GV_TRUST_FORWARDED_FOR=true` only behind your load balancer.
-5. **Networking:** expose only the frontend and the gateway through an HTTPS load balancer (TLS certificates,
-   HSTS); keep services, Eureka and the database on a private network. The refresh cookie is `Secure` and
-   `SameSite=Strict`, so serve the SPA and the API from the same site.
-6. **Health:** liveness `/actuator/health/liveness`, readiness `/actuator/health/readiness` on each service;
-   `/healthz` on the frontend.
-7. **Resources:** start with 0.5 vCPU / 768 MB per JVM service (`-XX:MaxRAMPercentage=70` is set), 2 instances of
-   room, booking, payment and gateway. Multiple gateway instances need a shared rate limiter (Redis-backed
-   `RequestRateLimiter`) instead of the in-memory one.
-8. **Migrations:** run automatically at start; for zero-downtime releases use expand–contract migrations
-   (add columns first, deploy code, remove old columns in a later release).
-9. **Observability:** set `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`, ship logs to the platform's log service and
-   search by `correlationId`; scrape `/actuator/prometheus` from inside the private network; alert on 5xx rate,
-   `outboxDead > 0`, `NEEDS_ATTENTION` bookings and overdue holds (queries in [OPERATIONS.md](OPERATIONS.md)).
-10. **Payment provider:** implement `PaymentProvider` for a real provider (charge, retrieve, refund, its webhook
-    signature scheme) and register it instead of the simulated one; use the provider's test mode first.
-11. **Verification after deploy:** run `scripts/e2e-smoke.sh https://<gateway-host>` against a staging
-    environment (it creates test users and bookings — never run it against production data).
-12. **Rollback:** keep the previous image tags; roll back the application first. Migrations are forward-only, so
-    a release must stay compatible with the previous schema version (expand–contract) to allow rollback.
+| File | Purpose |
+|---|---|
+| `docker-compose.prod.yml` | overlay: adds **Caddy** (only published ports: 80/443), removes every other host port, `SPRING_PROFILES_ACTIVE=prod` (no Swagger/API docs), CORS and e-mail links set to `https://${GV_DOMAIN}` |
+| `infrastructure/docker/caddy/Caddyfile` | automatic HTTPS (Let's Encrypt) for `GV_DOMAIN`, HSTS; `/api/*` → gateway load balancer, everything else → web app |
+| `scripts/deploy.sh` | on the VM: create/complete `.env`, build, start with `--wait`, then run the smoke test against `https://GV_DOMAIN` |
+| `.env` keys `GV_DOMAIN`, `ACME_EMAIL` | public host name and Let's Encrypt account e-mail (`init-env.sh` adds them empty) |
+
+### Steps (Oracle Cloud)
+
+1. **Account** (you): create an Oracle Cloud Free Tier account at https://www.oracle.com/cloud/free/.
+2. **VM**: *Compute → Instances → Create*: image **Ubuntu 24.04**, shape **VM.Standard.A1.Flex** with 4 OCPU and
+   24 GB memory (Always Free eligible), upload your SSH public key, keep the public IPv4 address.
+3. **Firewall**: in the instance's *Virtual Cloud Network → Security List*, add ingress rules for TCP 80 and 443
+   from `0.0.0.0/0` (SSH 22 is open by default). On the VM, Ubuntu images also filter with iptables:
+   `sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT && sudo netfilter-persistent save`.
+4. **Domain**: point a host name at the VM's public IP (an A record at your DNS provider, or a free dynamic-DNS
+   subdomain such as DuckDNS). Let's Encrypt needs this name to resolve before the first start.
+5. **Docker**: `ssh ubuntu@<ip>`, then `curl -fsSL https://get.docker.com | sh` and `sudo usermod -aG docker ubuntu`
+   (log out and in again). Install `git`, `jq` and `openssl` if missing (`sudo apt-get install -y git jq openssl`).
+6. **Code**: `git clone <your GitHub repository URL> grandvista && cd grandvista`.
+7. **Configure**: `./scripts/init-env.sh`, then edit `.env`: set `GV_DOMAIN=<your host name>`,
+   `ACME_EMAIL=<your e-mail>`, and decide `GV_DEMO_SEED_ENABLED` (`true` loads the fictional rooms and demo accounts).
+   Optionally `GV_PAYMENT_PROVIDER=razorpay` with test keys (see "Razorpay test mode"; the webhook URL becomes
+   `https://<host>/api/v1/payments/webhooks/razorpay`).
+8. **Deploy**: `./scripts/deploy.sh` — builds the images on the VM (ARM64), starts everything, waits for health
+   checks and runs the smoke test against the public HTTPS URL. Later updates: `./scripts/deploy.sh --pull`.
+9. **Operate**: `docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f <service>`; backups with
+   `pg_dump` per database (see OPERATIONS.md) copied off the VM; `sudo apt-get upgrade` regularly.
+
+Remember that the smoke test creates test users and bookings: run it only on a demo deployment.
+
+### Local test of the production overlay (performed)
+
+```bash
+GV_DOMAIN=localhost ACME_EMAIL=ops@example.test docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --wait
+```
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml cp caddy:/data/caddy/pki/authorities/local/root.crt /tmp/caddy-root.crt
+```
+```bash
+CURL_CA_BUNDLE=/tmp/caddy-root.crt MAILPIT_URL= ./scripts/e2e-smoke.sh https://localhost
+```
+
+Results are recorded in [TESTING.md](../testing/TESTING.md#production-overlay-local-https-test).
+
+### Production-grade alternative (not free)
+
+Managed containers (Azure Container Apps / AWS ECS Fargate / Google Cloud Run) with managed PostgreSQL and a
+managed broker: push the images to a registry, keep secrets in the platform's secret manager, expose only the web
+app and the gateway behind an HTTPS load balancer, use readiness/liveness probes (`/actuator/health/readiness`,
+`/liveness`), structured logs (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`), and expand–contract migrations so that a
+release can be rolled back.
 
 ### CI/CD
 
-`.github/workflows/ci.yml` builds and tests the backend (with Testcontainers), lints/tests/builds the frontend,
-validates Compose and builds all images, and runs an advisory dependency audit. To enable deployment, add registry
-and cloud credentials as GitHub encrypted secrets, push images in the `images` job, and replace the disabled
-`deploy` job with your platform's deploy action. Status: the workflow has not yet run on GitHub.
+`.github/workflows/ci.yml` builds and tests the backend (Testcontainers, JaCoCo), lints/tests/builds the frontend,
+builds all images, starts the full stack and runs the smoke test, and runs an advisory dependency audit. The
+`deploy` job is disabled; to enable continuous deployment to the VM, add the VM's SSH key and host as GitHub
+encrypted secrets and run `ssh … ./scripts/deploy.sh --pull` from that job. Status: the workflow has not yet run on
+GitHub (no repository configured).

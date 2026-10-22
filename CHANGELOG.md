@@ -5,6 +5,15 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Phase 7 — Cloud deployment preparation (no deployment performed)
+- **Added:** `docker-compose.prod.yml` (Caddy with automatic HTTPS as the only published service, `prod` profile,
+  CORS and e-mail links on `https://GV_DOMAIN`), `infrastructure/docker/caddy/Caddyfile`, `scripts/deploy.sh`,
+  `.env` keys `GV_DOMAIN` and `ACME_EMAIL`; step-by-step Oracle Cloud Always Free guide in DEPLOYMENT.md.
+- **Changed:** the `prod` profile no longer hard-disables demo data; it follows `GV_DEMO_SEED_ENABLED` (default off).
+- **Verified (locally, GV_DOMAIN=localhost):** only 80/443 published, HTTP→HTTPS redirect, HSTS, smoke test over
+  HTTPS 52/52 after making Caddy answer 404 for `/internal/*`. **Not done:** a real cloud deployment (needs your
+  cloud account and a domain).
+
 ### Phase 6 — CI workflow (prepared; not yet run on GitHub)
 - **Changed:** `.github/workflows/ci.yml` — backend build + all tests with JaCoCo (coverage summary in the job
   summary; surefire and coverage reports uploaded as artifacts), frontend lint/type check/tests/build, then an `e2e`

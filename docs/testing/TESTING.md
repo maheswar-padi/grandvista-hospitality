@@ -218,6 +218,19 @@ Run A's failure: a request in flight to the killed gateway got 504 from nginx af
 being passed to the other gateway. A run before the Phase 4 fixes failed the booking with a replica killed (connect
 error `NoRouteToHostException` was not retried). Raw output: [evidence/failover-demo.txt](evidence/failover-demo.txt).
 
+## Production overlay, local HTTPS test (22 Oct 2026)
+
+`docker-compose.prod.yml` with `GV_DOMAIN=localhost` on the development machine (Caddy's local CA, not Let's
+Encrypt — no public deployment was made):
+
+| Check | Result |
+|---|---|
+| Published ports | only Caddy (80, 443); DB, RabbitMQ, Mailpit, Eureka and the old 8080/3000 ports refused connections |
+| `http://localhost/` | 308 redirect to HTTPS |
+| `https://localhost/` | HTTP/2 200 with `Strict-Transport-Security: max-age=31536000; includeSubDomains` |
+| Swagger UI path | served the web app (API docs are disabled by the `prod` profile) |
+| `e2e-smoke.sh https://localhost` (e-mail checks skipped) | first run 51/52: `/internal/…` returned the web app (200) instead of 404 — Caddy now answers 404 for `/internal/*`; second run **52/52** |
+
 ## 7. Not tested / limitations of the evidence
 
 * No real payment provider (only the simulated one) and no cloud deployment exist to test.

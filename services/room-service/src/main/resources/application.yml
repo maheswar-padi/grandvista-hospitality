@@ -107,7 +107,7 @@ spring:
       on-profile: prod
 gv:
   demo:
-    seed-enabled: false
+    seed-enabled: ${GV_DEMO_SEED_ENABLED:false}
 springdoc:
   api-docs:
     enabled: false
