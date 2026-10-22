@@ -1,3 +1,4 @@
+# Template: rendered to /etc/nginx/conf.d/default.conf at container start (envsubst of ${CSP_*} only).
 # Serves the single-page app and proxies /api to the API gateway, so browsers talk to one origin.
 upstream api_gateway {
     server api-gateway:8080;
@@ -14,8 +15,9 @@ server {
     gzip on;
     gzip_types text/css application/javascript application/json image/svg+xml;
 
-    # Security headers. Inline styles are allowed for the charting library; scripts are same-origin only.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
+    # Security headers. Inline styles are allowed for the charting library; scripts are same-origin only, plus
+    # Razorpay Checkout's hosts when GV_PAYMENT_PROVIDER=razorpay (set by docker-entrypoint.d/15-payment-csp.envsh).
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'${CSP_SCRIPT_EXTRA}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:${CSP_IMG_EXTRA}; font-src 'self'; connect-src 'self'${CSP_CONNECT_EXTRA}; frame-src 'self'${CSP_FRAME_EXTRA}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -48,7 +50,7 @@ server {
     # SPA routing: unknown paths fall back to index.html (never cached).
     location / {
         add_header Cache-Control "no-cache";
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'${CSP_SCRIPT_EXTRA}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:${CSP_IMG_EXTRA}; font-src 'self'; connect-src 'self'${CSP_CONNECT_EXTRA}; frame-src 'self'${CSP_FRAME_EXTRA}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;

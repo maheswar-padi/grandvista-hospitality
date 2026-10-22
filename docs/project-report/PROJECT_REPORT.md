@@ -334,6 +334,15 @@ response lost" timeouts resolved by a reconciliation job. Webhooks are de-duplic
 customer's request carries only a provider token — no amount and no card data — and no administrative endpoint can
 change a payment's status.
 
+A second gateway implementation targets **Razorpay test mode** (selected with `GV_PAYMENT_PROVIDER=razorpay`). The
+server creates a Razorpay order for the exact amount in paise once per payment; the browser pays in Razorpay
+Checkout and returns the payment id, order id and signature; the server verifies
+`HMAC-SHA256(order_id | payment_id, key_secret)` and then fetches the payment from Razorpay, checks order, amount
+and currency, and captures it if it is only authorised. Signed webhooks (`payment.captured`, `order.paid`) confirm
+payments whose browser closed, and a capture that arrives for a payment already voided is refunded automatically.
+This path is verified with automated tests against a fake Razorpay API; it was not run against Razorpay's real
+test API because no test keys were available.
+
 ## 20. Distributed consistency
 
 * **Saga with compensation:** a failed or expired step releases the hold, voids the payment or refunds it.
@@ -430,7 +439,8 @@ must not contain fabricated images):
 
 ## 26. Limitations
 
-* Payments use a simulated provider; no real provider or real money is involved.
+* Payments use the simulated provider by default; the Razorpay test-mode gateway is tested only against a fake
+  Razorpay API (no test keys were available). No live payments are possible.
 * The system has not been deployed to a cloud platform; the CI workflow has not been executed on GitHub.
 * Gateway rate limiting is in memory (single gateway instance); Eureka and the gateway were not run in multiple
   instances.

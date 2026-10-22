@@ -102,10 +102,65 @@ public class PaymentService {
         return payments.findByCustomerId(customerId, pageable);
     }
 
+    /**
+     * Starts the provider checkout for the owner: creates the provider order once (Razorpay) and returns what the
+     * browser needs. Repeated calls return the same order. The network call happens outside any transaction.
+     */
+    public PaymentProvider.CheckoutSession checkout(UUID paymentId, AuthenticatedUser caller) {
+        UUID customerId = caller.requireUserId();
+        Payment payment = tx.execute(status -> {
+            Payment p = payments.findById(paymentId).orElseThrow(PaymentService::notFound);
+            if (!p.getCustomerId().equals(customerId)) {
+                throw notFound();
+            }
+            requirePayable(p, clock.instant());
+            return p;
+        });
+        PaymentProvider.CheckoutSession session;
+        try {
+            session = provider.checkout(new PaymentProvider.CheckoutRequest(paymentId, payment.getAmount(),
+                    payment.getCurrency(), payment.getBookingReference(), payment.getProviderOrderId(), payment.getExpiresAt()));
+        } catch (PaymentProvider.ProviderUnavailableException ex) {
+            log.warn("Checkout for payment {} failed: {}", paymentId, ex.getMessage());
+            throw new ApiException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_PROVIDER_UNAVAILABLE",
+                    "The payment provider is not reachable. Please try again in a moment.");
+        }
+        if (session.orderId() == null || session.orderId().equals(payment.getProviderOrderId())) {
+            return session;
+        }
+        String orderId = tx.execute(status -> {
+            Payment locked = payments.findByIdForUpdate(paymentId).orElseThrow();
+            if (locked.attachProviderOrder(session.orderId())) {
+                audit.record(paymentId, "CHECKOUT_STARTED", locked.getStatus(), locked.getStatus(),
+                        provider.name() + " order " + session.orderId());
+            }
+            return locked.getProviderOrderId(); // a concurrent request may have attached its order first
+        });
+        return new PaymentProvider.CheckoutSession(session.provider(), session.publicKey(), orderId, session.amount(),
+                session.currency(), session.amountMinorUnits());
+    }
+
     /** Customer confirmation with a provider test token; idempotent per (payment, Idempotency-Key). */
     public Payment confirm(UUID paymentId, String idempotencyKey, String paymentMethodToken, AuthenticatedUser caller) {
+        return confirm(paymentId, idempotencyKey, paymentMethodToken, null, caller);
+    }
+
+    /**
+     * Customer confirmation with either a provider token (simulated) or a provider checkout result (Razorpay);
+     * idempotent per (payment, Idempotency-Key).
+     */
+    public Payment confirm(UUID paymentId, String idempotencyKey, String paymentMethodToken,
+            PaymentProvider.CheckoutResult checkout, AuthenticatedUser caller) {
         UUID customerId = caller.requireUserId();
-        Started begun = tx.execute(status -> begin(paymentId, idempotencyKey, paymentMethodToken, customerId));
+        if (provider.usesCheckout() && checkout == null) {
+            throw ApiException.badRequest("CHECKOUT_RESULT_REQUIRED",
+                    "This payment must be completed in the " + provider.name() + " checkout.");
+        }
+        if (!provider.usesCheckout() && (checkout != null || paymentMethodToken == null)) {
+            throw ApiException.badRequest("PAYMENT_METHOD_TOKEN_REQUIRED", "A payment-method token is required.");
+        }
+        String method = checkout != null ? provider.name().toLowerCase() + "_checkout" : paymentMethodToken;
+        Started begun = tx.execute(status -> begin(paymentId, idempotencyKey, method, customerId, checkout != null));
         Payment started = begun.payment();
         if (!begun.newAttempt()) {
             return started; // replay of an earlier request with the same key: report the current state
@@ -114,7 +169,8 @@ public class PaymentService {
         ChargeResult result;
         try {
             result = provider.charge(new PaymentProvider.ChargeRequest(paymentId.toString(), started.getAmount(),
-                    started.getCurrency(), paymentMethodToken, "Booking " + started.getBookingReference()));
+                    started.getCurrency(), paymentMethodToken, "Booking " + started.getBookingReference(),
+                    started.getProviderOrderId(), checkout));
         } catch (PaymentProvider.ProviderUnavailableException ex) {
             log.warn("Provider outcome unknown for payment {}: {}. Leaving PENDING for reconciliation.", paymentId,
                     ex.getMessage());
@@ -135,11 +191,36 @@ public class PaymentService {
         });
     }
 
+    /**
+     * The provider reports money captured for a payment the customer never confirmed with us (e.g. the browser
+     * closed after paying): move CREATED to PENDING so the outcome can be applied. No-op in any other status.
+     */
+    @Transactional
+    public Payment markPendingFromProvider(UUID paymentId, String source) {
+        Payment payment = payments.findByIdForUpdate(paymentId).orElseThrow(PaymentService::notFound);
+        if (payment.getStatus() == PaymentStatus.CREATED) {
+            PaymentStatus from = payment.transitionTo(PaymentStatus.PENDING, clock.instant());
+            audit.record(paymentId, "AUTHORIZATION_STARTED", from, PaymentStatus.PENDING, source);
+        }
+        return payment;
+    }
+
+    private void requirePayable(Payment payment, Instant now) {
+        if (payment.getStatus() != PaymentStatus.CREATED) {
+            throw ApiException.conflict(payment.getStatus() == PaymentStatus.PENDING ? "PAYMENT_IN_PROGRESS" : "PAYMENT_ALREADY_PROCESSED",
+                    "This payment is already " + payment.getStatus().name().toLowerCase().replace('_', ' ') + ".",
+                    Map.of("paymentStatus", payment.getStatus().name()));
+        }
+        if (payment.isExpired(now)) {
+            throw ApiException.conflict("PAYMENT_EXPIRED", "The payment window for this booking has closed.");
+        }
+    }
+
     private record Started(Payment payment, boolean newAttempt) {
     }
 
     /** Runs under the payment row lock, so concurrent confirmations are serialised. */
-    private Started begin(UUID paymentId, String idempotencyKey, String token, UUID customerId) {
+    private Started begin(UUID paymentId, String idempotencyKey, String token, UUID customerId, boolean viaCheckout) {
         Payment payment = payments.findByIdForUpdate(paymentId).orElseThrow(PaymentService::notFound);
         if (!payment.getCustomerId().equals(customerId)) {
             throw notFound(); // do not reveal that another customer's payment exists
@@ -148,13 +229,9 @@ public class PaymentService {
             return new Started(payment, false);
         }
         Instant now = clock.instant();
-        if (payment.getStatus() != PaymentStatus.CREATED) {
-            throw ApiException.conflict(payment.getStatus() == PaymentStatus.PENDING ? "PAYMENT_IN_PROGRESS" : "PAYMENT_ALREADY_PROCESSED",
-                    "This payment is already " + payment.getStatus().name().toLowerCase().replace('_', ' ') + ".",
-                    Map.of("paymentStatus", payment.getStatus().name()));
-        }
-        if (payment.isExpired(now)) {
-            throw ApiException.conflict("PAYMENT_EXPIRED", "The payment window for this booking has closed.");
+        requirePayable(payment, now);
+        if (viaCheckout && payment.getProviderOrderId() == null) {
+            throw ApiException.conflict("CHECKOUT_NOT_STARTED", "Start the checkout for this payment first.");
         }
         attempts.save(new PaymentAttempt(paymentId, idempotencyKey, token, PaymentAttempt.Status.PROCESSING, now));
         PaymentStatus from = payment.transitionTo(PaymentStatus.PENDING, now);

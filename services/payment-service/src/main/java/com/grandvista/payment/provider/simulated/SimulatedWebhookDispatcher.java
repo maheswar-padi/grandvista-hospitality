@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,7 +26,7 @@ import org.springframework.web.client.RestClientException;
  * callbacks over real HTTP to the payment-service's public webhook endpoint, retrying non-2xx answers.
  */
 @Component
-@ConditionalOnProperty(name = "gv.payment.simulator.enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnExpression("${gv.payment.simulator.enabled:true} and '${gv.payment.provider:simulated}' == 'simulated'")
 public class SimulatedWebhookDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(SimulatedWebhookDispatcher.class);

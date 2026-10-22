@@ -5,6 +5,22 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Phase 3 — Payment gateways (simulated + Razorpay test mode)
+- **Added:** Razorpay test-mode gateway behind the existing `PaymentProvider` interface, selected with
+  `GV_PAYMENT_PROVIDER` (`simulated` default, `razorpay`). New `POST /api/v1/payments/{id}/checkout` creates the
+  Razorpay order once per payment (migration `V2__provider_order.sql`); `confirm` accepts the Checkout result,
+  verifies the signature, looks the payment up at Razorpay (order/amount/currency) and captures it; signed,
+  de-duplicated webhooks at `/api/v1/payments/webhooks/razorpay`; reconciliation by order; refunds in paise;
+  automatic refund of a capture that arrives for a voided or failed payment. Keys only from `.env`; live keys
+  and missing keys stop the service at start-up (verified live).
+- **Added:** frontend Razorpay Checkout flow (`lib/razorpay.ts`, payment page) and a Content-Security-Policy that
+  allows Razorpay's hosts only in razorpay mode (nginx template, verified for both modes).
+- **Fixed (found by the new tests):** the payment-service security rules only allowed the simulated webhook path,
+  so Razorpay webhooks were rejected before signature verification.
+- **Verified:** payment-service 52 tests (Razorpay: 8 against a fake Razorpay API + 3 signature tests with
+  openssl-computed vectors); frontend 27 tests (3 new for both payment modes); e2e 56/56 in simulated mode.
+  **Not verified:** calls to Razorpay's real test API (needs test keys).
+
 ### Phase 2 — Message broker and e-mail notifications
 - **Added:** RabbitMQ 4.1 (management UI, loopback only) and Mailpit 1.27 (local SMTP inbox) to Compose.
   Topic exchange `grandvista.events`; events `BOOKING_CREATED`, `BOOKING_CONFIRMED`, `BOOKING_CANCELLED`,

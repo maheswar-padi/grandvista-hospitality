@@ -44,6 +44,9 @@ public class Payment {
     @Column(name = "provider_reference")
     private String providerReference;
 
+    @Column(name = "provider_order_id")
+    private String providerOrderId;
+
     @Column(name = "failure_code")
     private String failureCode;
 
@@ -92,6 +95,19 @@ public class Payment {
         status = target;
         updatedAt = now;
         return previous;
+    }
+
+    /** Records the provider order once; a different order id for the same payment is refused. */
+    public boolean attachProviderOrder(String orderId) {
+        if (providerOrderId == null) {
+            providerOrderId = orderId;
+            return true;
+        }
+        return providerOrderId.equals(orderId);
+    }
+
+    public String getProviderOrderId() {
+        return providerOrderId;
     }
 
     public void recordProviderReference(String reference) {

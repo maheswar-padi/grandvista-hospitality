@@ -9,6 +9,7 @@ import { ErrorState, LoadingBlock } from '../components/ui/States';
 import { bookingsApi, paymentsApi } from '../lib/api/endpoints';
 import { ApiError, newIdempotencyKey } from '../lib/api/http';
 import { formatDate, formatMoney } from '../lib/format';
+import { CheckoutDismissedError, payWithRazorpay } from '../lib/razorpay';
 
 function useCountdown(until: string | null) {
   const [now, setNow] = useState(() => Date.now());
@@ -24,14 +25,38 @@ export default function PaymentPage() {
   const { bookingId = '' } = useParams();
   const navigate = useNavigate();
   const booking = useQuery({ queryKey: ['booking', bookingId], queryFn: () => bookingsApi.get(bookingId), staleTime: 0 });
-  const methods = useQuery({ queryKey: ['payment-test-methods'], queryFn: paymentsApi.testMethods, staleTime: Infinity });
+  const paymentId = booking.data?.paymentId ?? null;
+  const payable = booking.data?.status === 'PENDING_PAYMENT' && !!paymentId;
+  // Which provider is configured (simulated or Razorpay test mode); for Razorpay this creates the order once.
+  const checkout = useQuery({
+    queryKey: ['payment-checkout', paymentId],
+    queryFn: () => paymentsApi.checkout(paymentId!),
+    enabled: payable,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const isRazorpay = checkout.data?.provider === 'RAZORPAY';
+  const methods = useQuery({
+    queryKey: ['payment-test-methods'],
+    queryFn: paymentsApi.testMethods,
+    staleTime: Infinity,
+    enabled: checkout.data?.provider === 'SIMULATED',
+  });
   const [method, setMethod] = useState('sim_card_success');
+  const [attemptError, setAttemptError] = useState<string | null>(null);
   // one key per payment attempt on this page: repeated clicks/retries cannot charge twice
   const attemptKey = useRef(newIdempotencyKey());
   const secondsLeft = useCountdown(booking.data?.holdExpiresAt ?? null);
 
   const pay = useMutation({
-    mutationFn: () => paymentsApi.confirm(booking.data!.paymentId!, method, attemptKey.current),
+    mutationFn: async () => {
+      if (isRazorpay) {
+        setAttemptError(null);
+        const result = await payWithRazorpay(checkout.data!, setAttemptError);
+        return paymentsApi.confirmRazorpay(paymentId!, result, attemptKey.current);
+      }
+      return paymentsApi.confirm(paymentId!, method, attemptKey.current);
+    },
     // The confirmation page shows the authoritative outcome (success, decline or still processing).
     onSuccess: () => navigate(`/bookings/${bookingId}/confirmation`, { replace: true }),
     onError: (error) => {
@@ -40,6 +65,13 @@ export default function PaymentPage() {
       }
     },
   });
+
+  const checkoutError = checkout.error;
+  useEffect(() => {
+    if (checkoutError instanceof ApiError && ['PAYMENT_ALREADY_PROCESSED', 'PAYMENT_IN_PROGRESS'].includes(checkoutError.code)) {
+      navigate(`/bookings/${bookingId}/confirmation`, { replace: true });
+    }
+  }, [checkoutError, bookingId, navigate]);
 
   if (booking.isPending) return <div className="container-page py-16"><LoadingBlock label="Loading your booking…" /></div>;
   if (booking.isError) return <div className="container-page py-16"><ErrorState error={booking.error} onRetry={() => booking.refetch()} /></div>;
@@ -58,10 +90,17 @@ export default function PaymentPage() {
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_400px]">
         <div className="card space-y-6 p-6 sm:p-8">
-          <Alert tone="warning" title="Simulated payment — no real money is charged">
-            This demonstration uses a <strong>simulated payment provider</strong>. Choose a test method below to see how the system
-            handles approvals, declines, delayed bank confirmations and timeouts. Never enter real card details anywhere on this site.
-          </Alert>
+          {isRazorpay ? (
+            <Alert tone="warning" title="Razorpay test mode — no real money is charged">
+              Payments go through <strong>Razorpay in test mode</strong>. Use Razorpay&rsquo;s published test cards or test UPI IDs in the
+              Razorpay window; real cards are not charged in test mode. Your payment is confirmed only after our server has verified it with Razorpay.
+            </Alert>
+          ) : (
+            <Alert tone="warning" title="Simulated payment — no real money is charged">
+              This demonstration uses a <strong>simulated payment provider</strong>. Choose a test method below to see how the system
+              handles approvals, declines, delayed bank confirmations and timeouts. Never enter real card details anywhere on this site.
+            </Alert>
+          )}
           <div className={`flex items-center gap-3 rounded-xl p-4 text-sm ${expired ? 'bg-red-50 text-red-900' : 'bg-gold-50 text-ink-800'}`} role="timer" aria-live="off">
             <Timer className="size-5 text-gold-600" aria-hidden />
             {expired ? (
@@ -73,23 +112,35 @@ export default function PaymentPage() {
             )}
           </div>
 
-          <fieldset>
-            <legend className="mb-3 flex items-center gap-2 text-lg font-semibold"><FlaskConical className="size-5 text-gold-600" aria-hidden /> Test payment method</legend>
-            {methods.isPending && <LoadingBlock />}
-            {methods.isError && <Alert tone="error">Payment methods could not be loaded.</Alert>}
-            <div className="space-y-2">
-              {methods.data?.map((m) => (
-                <label key={m.token} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm transition ${method === m.token ? 'border-ink-900 bg-ink-50' : 'border-ink-200 hover:border-ink-400'}`}>
-                  <input type="radio" name="method" value={m.token} checked={method === m.token} onChange={() => setMethod(m.token)} className="mt-0.5 size-4 accent-ink-900" />
-                  <span>
-                    <span className="block font-medium text-ink-900">{m.label}</span>
-                    <span className="block text-xs text-ink-500">Expected outcome: {m.expectedOutcome}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          {checkout.isPending && <LoadingBlock label="Preparing payment…" />}
+          {checkout.isError && <ErrorState error={checkout.error} onRetry={() => checkout.refetch()} />}
 
+          {checkout.data?.provider === 'SIMULATED' && (
+            <fieldset>
+              <legend className="mb-3 flex items-center gap-2 text-lg font-semibold"><FlaskConical className="size-5 text-gold-600" aria-hidden /> Test payment method</legend>
+              {methods.isPending && <LoadingBlock />}
+              {methods.isError && <Alert tone="error">Payment methods could not be loaded.</Alert>}
+              <div className="space-y-2">
+                {methods.data?.map((m) => (
+                  <label key={m.token} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm transition ${method === m.token ? 'border-ink-900 bg-ink-50' : 'border-ink-200 hover:border-ink-400'}`}>
+                    <input type="radio" name="method" value={m.token} checked={method === m.token} onChange={() => setMethod(m.token)} className="mt-0.5 size-4 accent-ink-900" />
+                    <span>
+                      <span className="block font-medium text-ink-900">{m.label}</span>
+                      <span className="block text-xs text-ink-500">Expected outcome: {m.expectedOutcome}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {attemptError && <Alert tone="error" title="Payment attempt not completed">{attemptError} You have not been charged for this attempt.</Alert>}
+          {pay.error instanceof CheckoutDismissedError && (
+            <Alert tone="info">{pay.error.message} You can try again while your room is held.</Alert>
+          )}
+          {pay.error instanceof Error && !(pay.error instanceof ApiError) && !(pay.error instanceof CheckoutDismissedError) && (
+            <Alert tone="error">{pay.error.message}</Alert>
+          )}
           {pay.error instanceof ApiError && pay.error.status >= 400 && pay.error.status < 500 && (
             <Alert tone="error">{pay.error.message}</Alert>
           )}
@@ -98,8 +149,11 @@ export default function PaymentPage() {
               Your payment may or may not have been processed. Pressing pay again is safe — you will never be charged twice.
             </Alert>
           )}
-          <Button size="lg" className="w-full" icon={<CreditCard className="size-4" aria-hidden />} loading={pay.isPending} disabled={expired || !methods.data} onClick={() => pay.mutate()}>
-            Pay {formatMoney(b.price?.total, b.price?.currency)} (simulated)
+          <Button size="lg" className="w-full" icon={<CreditCard className="size-4" aria-hidden />} loading={pay.isPending}
+            disabled={expired || !checkout.data || (!isRazorpay && !methods.data)} onClick={() => pay.mutate()}>
+            {isRazorpay
+              ? `Pay ${formatMoney(b.price?.total, b.price?.currency)} with Razorpay (test mode)`
+              : `Pay ${formatMoney(b.price?.total, b.price?.currency)} (simulated)`}
           </Button>
         </div>
 

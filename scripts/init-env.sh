@@ -49,6 +49,10 @@ put GV_DEMO_CUSTOMER_EMAIL guest@grandvista.local
 put GV_DEMO_CUSTOMER_PASSWORD "Guest-$(rand 6)-7"
 put GV_DEMO_STAFF_EMAIL staff@grandvista.local
 put GV_DEMO_STAFF_PASSWORD "Staff-$(rand 6)-7"
+put GV_PAYMENT_PROVIDER simulated
+put RAZORPAY_KEY_ID ""
+put RAZORPAY_KEY_SECRET ""
+put RAZORPAY_WEBHOOK_SECRET ""
 put GV_HOTEL_ZONE Asia/Kolkata
 put GV_DEMO_SEED_ENABLED true
 put GV_HOLD_TTL 15m

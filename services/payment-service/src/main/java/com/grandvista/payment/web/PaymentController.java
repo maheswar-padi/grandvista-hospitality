@@ -3,6 +3,8 @@ package com.grandvista.payment.web;
 import com.grandvista.payment.repository.PaymentEventRepository;
 import com.grandvista.payment.repository.RefundRepository;
 import com.grandvista.payment.service.PaymentService;
+import com.grandvista.payment.domain.Payment;
+import com.grandvista.payment.web.dto.PaymentDtos.CheckoutResponse;
 import com.grandvista.payment.web.dto.PaymentDtos.ConfirmPaymentRequest;
 import com.grandvista.payment.web.dto.PaymentDtos.PaymentDetailResponse;
 import com.grandvista.payment.web.dto.PaymentDtos.PaymentEventResponse;
@@ -45,7 +47,12 @@ public class PaymentController {
     private final RefundRepository refunds;
     private final PaymentEventRepository events;
 
-    public PaymentController(PaymentService payments, RefundRepository refunds, PaymentEventRepository events) {
+    private final String merchantName;
+
+    public PaymentController(PaymentService payments, RefundRepository refunds, PaymentEventRepository events,
+            @org.springframework.beans.factory.annotation.Value("${gv.payment.razorpay.merchant-name:GrandVista Hospitality}")
+            String merchantName) {
+        this.merchantName = merchantName;
         this.payments = payments;
         this.refunds = refunds;
         this.events = events;
@@ -70,7 +77,20 @@ public class PaymentController {
             @RequestHeader("Idempotency-Key") @Pattern(regexp = "^[A-Za-z0-9_-]{8,80}$") String idempotencyKey,
             @Valid @RequestBody ConfirmPaymentRequest request, Authentication authentication) {
         return PaymentResponse.from(payments.confirm(paymentId, idempotencyKey, request.paymentMethodToken(),
-                AuthenticatedUser.from(authentication)));
+                request.checkoutResult(), AuthenticatedUser.from(authentication)));
+    }
+
+    @Operation(summary = "Start the provider checkout (Razorpay: creates the order once). Owner only.")
+    @PostMapping("/{paymentId}/checkout")
+    public CheckoutResponse checkout(@PathVariable UUID paymentId, Authentication authentication) {
+        AuthenticatedUser caller = AuthenticatedUser.from(authentication);
+        var session = payments.checkout(paymentId, caller);
+        Payment payment = payments.getForCaller(paymentId, caller);
+        boolean simulated = "SIMULATED".equals(session.provider());
+        return new CheckoutResponse(paymentId, session.provider(), true, session.publicKey(), session.orderId(),
+                session.amount(), session.amountMinorUnits(), session.currency(), merchantName,
+                "Booking " + payment.getBookingReference(), payment.getBookingReference(),
+                simulated ? null : caller.email(), payment.getExpiresAt());
     }
 
     @Operation(summary = "A payment (owner, STAFF or ADMIN)")

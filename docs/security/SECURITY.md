@@ -84,6 +84,12 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
   against traversal, served with `nosniff`, `Content-Security-Policy: default-src 'none'`.
 * **Errors:** RFC 9457 documents with safe messages; `include-stacktrace: never`; unexpected errors are logged
   server-side with the correlation ID only.
+* **Razorpay (test mode):** keys only from the environment, live keys (`rzp_live_…`) refused at start-up, secrets
+  masked in `toString()` and never returned to the browser (only the publishable key id); the browser's checkout
+  result is HMAC-verified **and** the payment is looked up at Razorpay (order, amount and currency must match)
+  before anything is confirmed; webhooks verified with `X-Razorpay-Signature` and de-duplicated by
+  `X-Razorpay-Event-Id`; a capture that arrives for a voided or failed payment is refunded, never confirmed; the
+  frontend's CSP allows Razorpay's hosts only when `GV_PAYMENT_PROVIDER=razorpay`.
 * **Webhooks:** HMAC-SHA256 over the raw body with a timestamp (±5 min tolerance) and constant-time comparison;
   de-duplicated by provider event id; unknown payments answered 503 so the provider retries instead of losing data.
 * **Redirects:** post-login `next` accepts only same-site relative paths (`safeRedirect`, unit-tested against
@@ -124,6 +130,6 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
 | `/actuator/prometheus` is unauthenticated on the internal network | Low | not routed publicly; restrict by network policy |
 | CSP allows inline styles (`style-src 'unsafe-inline'`, needed by the charting library) | Low | scripts remain same-origin only |
 | Uploaded images are stored as uploaded (metadata such as EXIF is not stripped) | Low | re-encode images in the media pipeline |
-| Payment provider is simulated; real provider signature scheme not implemented | n/a | implement `PaymentProvider` + provider webhook verification |
+| Razorpay integration not yet exercised against Razorpay's real test API | Medium | run the steps in DEPLOYMENT.md "Razorpay test mode" with test keys before relying on it |
 | Dependency scanning is advisory (`npm audit`, dependency review) and not yet run in CI | Medium | enable OWASP dependency-check / Dependabot after pushing to GitHub |
 | No TLS in local Compose | n/a locally | terminate HTTPS at the load balancer in any shared deployment |

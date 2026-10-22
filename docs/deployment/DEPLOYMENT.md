@@ -89,6 +89,37 @@ All configuration is environment-based (12-factor). The full list with defaults 
 | `SPRING_PROFILES_ACTIVE` | all | `prod` disables docs and demo data and enforces secrets |
 | `LOGGING_STRUCTURED_FORMAT_CONSOLE` | all | set to `ecs` for JSON logs |
 
+## Razorpay test mode
+
+The payment-service has two gateway implementations behind `PaymentProvider`, selected with
+`GV_PAYMENT_PROVIDER`:
+
+| Value | What happens | Needs |
+|---|---|---|
+| `simulated` (default) | built-in simulated provider: test tokens, signed webhooks, timeouts — no external calls | nothing |
+| `razorpay` | Razorpay **test mode**: server-created orders, Razorpay Checkout in the browser, server-side signature check and payment lookup, capture, signed webhooks, refunds | the three keys below; live keys (`rzp_live_…`) are refused |
+
+**Status:** the Razorpay integration is built and covered by automated tests against a fake Razorpay API
+(`RazorpayFlowIntegrationTest`, 8 tests; `RazorpaySignaturesTest`, 3) and a browser test with a mocked Checkout
+widget. It has **not** been run against the real Razorpay test API, because no test keys were available.
+
+To switch on (no money moves in test mode):
+
+1. Create a Razorpay account at https://dashboard.razorpay.com and switch the dashboard to **Test Mode**.
+2. *Settings → API Keys → Generate Test Key*: put the key id (`rzp_test_…`) in `RAZORPAY_KEY_ID` and the secret in
+   `RAZORPAY_KEY_SECRET` in `.env` (never commit them).
+3. *Settings → Webhooks → Add New Webhook*: URL `https://<your-public-host>/api/v1/payments/webhooks/razorpay`,
+   a secret of your choice (put it in `RAZORPAY_WEBHOOK_SECRET`), events `payment.captured`, `payment.failed` and
+   `order.paid`. Razorpay cannot reach `localhost`; for a local test expose the gateway with a tunnel (e.g.
+   `cloudflared tunnel --url http://localhost:8080`) or rely on the browser confirmation plus reconciliation
+   (webhooks then only cover a closed browser).
+4. Set `GV_PAYMENT_PROVIDER=razorpay` in `.env` and run `docker compose up -d` (the payment-service and the
+   frontend read it; the frontend then allows Razorpay Checkout in its Content-Security-Policy).
+5. Book a room and pay with a Razorpay test card or test UPI ID shown in Razorpay's test-mode documentation.
+
+If any key is missing the payment-service stops at start-up with
+`GV_PAYMENT_PROVIDER=razorpay but these settings are empty: …` (verified).
+
 ## Running services locally
 
 Useful for debugging one service in an IDE while the rest runs in Docker. Example for the room-service:

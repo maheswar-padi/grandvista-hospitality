@@ -47,7 +47,8 @@ public class PaymentReconciliationJob {
     }
 
     public void reconcile(UUID paymentId) throws PaymentProvider.ProviderUnavailableException {
-        var result = provider.retrieve(paymentId.toString()).orElse(new PaymentProvider.ChargeResult(
+        String orderId = payments.findById(paymentId).map(com.grandvista.payment.domain.Payment::getProviderOrderId).orElse(null);
+        var result = provider.retrieve(paymentId.toString(), orderId).orElse(new PaymentProvider.ChargeResult(
                 PaymentProvider.Outcome.FAILED, null, "provider_no_record", "The provider has no record of this charge."));
         if (result.outcome() != PaymentProvider.Outcome.PENDING) {
             paymentService.applyOutcome(paymentId, result, "RECONCILIATION");

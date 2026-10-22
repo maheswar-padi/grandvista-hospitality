@@ -43,9 +43,12 @@ public class WebhookService {
     private final PaymentService paymentService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final PaymentProvider provider;
 
     public WebhookService(WebhookSecretHolder secret, PaymentProperties properties, WebhookEventRepository webhookEvents,
-            PaymentRepository payments, PaymentService paymentService, ObjectMapper objectMapper, Clock clock) {
+            PaymentRepository payments, PaymentService paymentService, ObjectMapper objectMapper, Clock clock,
+            PaymentProvider provider) {
+        this.provider = provider;
         this.secret = secret;
         this.properties = properties;
         this.webhookEvents = webhookEvents;
@@ -57,6 +60,9 @@ public class WebhookService {
 
     @Transactional
     public Result handleSimulated(byte[] rawBody, String signatureHeader) {
+        if (!SimulatedPaymentProvider.NAME.equals(provider.name())) {
+            throw ApiException.notFound("NOT_FOUND", "The simulated provider is not enabled.");
+        }
         if (!WebhookSignature.verify(secret.secret(), signatureHeader, rawBody, clock.instant(),
                 properties.webhookTolerance())) {
             log.warn("Rejected webhook with invalid or expired signature");

@@ -31,12 +31,43 @@ public final class PaymentDtos {
     }
 
     /**
-     * Customer confirmation. Carries only a provider-issued payment-method token — never card numbers — and
-     * no amount: the amount was fixed by the booking-service and cannot be changed by the client.
+     * Customer confirmation. Carries either a provider-issued payment-method token (simulated provider) or the
+     * Razorpay Checkout result (payment id, order id, signature) — never card numbers — and no amount: the amount
+     * was fixed by the booking-service and cannot be changed by the client.
      */
     public record ConfirmPaymentRequest(
-            @NotBlank @Pattern(regexp = "^[a-z0-9_]{3,40}$", message = "must be a provider payment-method token")
-            String paymentMethodToken) {
+            @Pattern(regexp = "^[a-z0-9_]{3,40}$", message = "must be a provider payment-method token")
+            String paymentMethodToken,
+            @Pattern(regexp = "^pay_[A-Za-z0-9]{6,40}$") String razorpayPaymentId,
+            @Pattern(regexp = "^order_[A-Za-z0-9]{6,40}$") String razorpayOrderId,
+            @Pattern(regexp = "^[a-fA-F0-9]{64}$") String razorpaySignature) {
+
+        public ConfirmPaymentRequest(String paymentMethodToken) {
+            this(paymentMethodToken, null, null, null);
+        }
+
+        @jakarta.validation.constraints.AssertTrue(message = "send either paymentMethodToken or all three razorpay fields")
+        public boolean isOneMethod() {
+            boolean token = paymentMethodToken != null;
+            boolean rzpAll = razorpayPaymentId != null && razorpayOrderId != null && razorpaySignature != null;
+            boolean rzpAny = razorpayPaymentId != null || razorpayOrderId != null || razorpaySignature != null;
+            return token ? !rzpAny : rzpAll;
+        }
+
+        public com.grandvista.payment.provider.PaymentProvider.CheckoutResult checkoutResult() {
+            return razorpayPaymentId == null ? null
+                    : new com.grandvista.payment.provider.PaymentProvider.CheckoutResult(razorpayPaymentId, razorpayOrderId,
+                    razorpaySignature);
+        }
+    }
+
+    /**
+     * What the browser needs to pay. For {@code RAZORPAY}: the publishable key id and the order to open in Razorpay
+     * Checkout (test mode). For {@code SIMULATED}: only the provider name (use the test payment methods).
+     */
+    public record CheckoutResponse(UUID paymentId, String provider, boolean testMode, String keyId, String orderId,
+                                   BigDecimal amount, Long amountMinorUnits, String currency, String merchantName,
+                                   String description, String bookingReference, String prefillEmail, Instant expiresAt) {
     }
 
     public record CancelPaymentRequest(@NotBlank @Pattern(regexp = "^[A-Z_]{3,60}$") String reason) {

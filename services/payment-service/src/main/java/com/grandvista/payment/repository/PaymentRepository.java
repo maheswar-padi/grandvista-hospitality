@@ -26,6 +26,10 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID>, JpaSpec
     @Query("select p from Payment p where p.provider = :provider and p.providerReference = :reference")
     Optional<Payment> findByProviderReferenceForUpdate(String provider, String reference);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p where p.provider = :provider and p.providerOrderId = :orderId")
+    Optional<Payment> findByProviderOrderIdForUpdate(String provider, String orderId);
+
     Page<Payment> findByCustomerId(UUID customerId, Pageable pageable);
 
 

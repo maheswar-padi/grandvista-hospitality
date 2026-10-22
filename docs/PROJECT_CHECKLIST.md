@@ -45,6 +45,10 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [x] RabbitMQ events with outboxes, publisher confirms, DLQs and idempotent consumers (real-broker tests)
 - [x] notification-service + Mailpit; e-mails verified by `NotificationFlowIntegrationTest` and e2e (56/56)
 
+## Payments (Phase 3, 22 Oct 2026)
+- [x] Gateway selection `GV_PAYMENT_PROVIDER` (simulated default)
+- [~] Razorpay test mode: implemented, tested against a fake Razorpay API and mocked Checkout; **not run against Razorpay's test API (needs keys)**
+
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
   exclusion-constraint deadlock (per-room row lock) · LocalDate JSON as arrays in load-balanced clients ·
@@ -63,7 +67,7 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [ ] Report: student details, institutional pages and screenshots (placeholders marked `[to be completed]`)
 
 ## Not done / limitations
-- Real payment provider (simulated only) · cloud deployment (none performed) · CI workflow never run on GitHub ·
+- Razorpay not run against the real test API (needs keys) · cloud deployment (none performed) · CI workflow never run on GitHub ·
   in-memory gateway rate limiting; gateway and Eureka not run as multiple instances ·
   e-mails captured by Mailpit only (no real provider) · responsive checks by emulation only ·
   not yet pushed to a remote

@@ -232,6 +232,30 @@ export interface Payment {
   updatedAt: string;
 }
 
+/** What the browser needs to pay (POST /payments/{id}/checkout). */
+export interface CheckoutSession {
+  paymentId: string;
+  provider: 'SIMULATED' | 'RAZORPAY' | string;
+  testMode: boolean;
+  keyId: string | null;
+  orderId: string | null;
+  amount: number;
+  amountMinorUnits: number | null;
+  currency: string;
+  merchantName: string;
+  description: string;
+  bookingReference: string;
+  prefillEmail: string | null;
+  expiresAt: string;
+}
+
+/** Result returned by Razorpay Checkout's success handler. */
+export interface RazorpayCheckoutResult {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
 export interface TestPaymentMethod {
   token: string;
   label: string;

@@ -75,6 +75,8 @@ The baseline (before Phases 1–2) was 148 tests. New classes are marked *(new)*
 | | WebhookSignatureTest | 2 |
 | | OutboxRelayContractTest | 3 |
 | | RabbitOutboxPublisherIntegrationTest *(new; real RabbitMQ)* | 3 |
+| | RazorpayFlowIntegrationTest *(new; fake Razorpay API)* | 8 |
+| | RazorpaySignaturesTest *(new; openssl vectors)* | 3 |
 | notification-service *(new)* | NotificationFlowIntegrationTest (real RabbitMQ + Mailpit + PostgreSQL) | 4 |
 | | EmailComposerTest | 2 |
 | | EventContractTest | 2 |

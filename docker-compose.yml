@@ -223,6 +223,11 @@ services:
       PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET}
       PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:?missing}
       GV_SIMULATOR_WEBHOOK_URL: http://payment-service:8084/api/v1/payments/webhooks/simulated
+      # simulated (default) or razorpay (TEST MODE keys required below; see DEPLOYMENT.md "Razorpay test mode")
+      GV_PAYMENT_PROVIDER: ${GV_PAYMENT_PROVIDER:-simulated}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
 
   booking-service:
     <<: *java-service
@@ -283,6 +288,9 @@ services:
   frontend:
     build: { context: ./frontend }
     image: grandvista/frontend:1.0.0
+    environment:
+      # Adds Razorpay Checkout's hosts to the Content-Security-Policy only in razorpay mode.
+      GV_PAYMENT_PROVIDER: ${GV_PAYMENT_PROVIDER:-simulated}
     restart: unless-stopped
     networks: [grandvista]
     depends_on:

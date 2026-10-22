@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Component
+@ConditionalOnProperty(name = "gv.payment.provider", havingValue = "simulated", matchIfMissing = true)
 public class SimulatedPaymentProvider implements PaymentProvider {
 
     public static final String NAME = "SIMULATED";

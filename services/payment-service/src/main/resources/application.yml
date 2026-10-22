@@ -61,6 +61,14 @@ gv:
     client-id: payment-service
     client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET:}
   payment:
+    # simulated (default; no money moves) or razorpay (Razorpay TEST MODE; keys below are required)
+    provider: ${GV_PAYMENT_PROVIDER:simulated}
+    razorpay:
+      key-id: ${RAZORPAY_KEY_ID:}
+      key-secret: ${RAZORPAY_KEY_SECRET:}
+      webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+      base-url: ${RAZORPAY_API_BASE_URL:https://api.razorpay.com}
+      merchant-name: GrandVista Hospitality
     webhook-secret: ${PAYMENT_WEBHOOK_SECRET:}
     webhook-tolerance: 5m
     outbox:

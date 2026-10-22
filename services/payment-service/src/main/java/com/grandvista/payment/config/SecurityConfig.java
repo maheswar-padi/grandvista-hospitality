@@ -25,7 +25,8 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         // authenticated by HMAC signature in the controller, not by a user token
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/simulated").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/simulated",
+                                "/api/v1/payments/webhooks/razorpay").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/payments/test-methods").permitAll()
                         .requestMatchers("/internal/**").hasRole(Roles.SERVICE)
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/**").hasAnyRole(Roles.ADMIN, Roles.STAFF)

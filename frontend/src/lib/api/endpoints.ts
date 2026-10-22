@@ -12,8 +12,10 @@ import type {
   InventorySummary,
   OccupancyPoint,
   Page,
+  CheckoutSession,
   Payment,
   PaymentStatus,
+  RazorpayCheckoutResult,
   PaymentSummary,
   PricingPolicy,
   QuoteResponse,
@@ -97,6 +99,17 @@ export const paymentsApi = {
   confirm: (paymentId: string, paymentMethodToken: string, idempotencyKey: string) =>
     request<Payment>(`/payments/${paymentId}/confirm`, { method: 'POST', body: { paymentMethodToken }, idempotencyKey }),
   mine: (page = 0) => request<Page<Payment>>('/payments/my', { query: { page, size: 50 } }),
+  checkout: (paymentId: string) => request<CheckoutSession>(`/payments/${paymentId}/checkout`, { method: 'POST' }),
+  confirmRazorpay: (paymentId: string, result: RazorpayCheckoutResult, idempotencyKey: string) =>
+    request<Payment>(`/payments/${paymentId}/confirm`, {
+      method: 'POST',
+      body: {
+        razorpayPaymentId: result.razorpay_payment_id,
+        razorpayOrderId: result.razorpay_order_id,
+        razorpaySignature: result.razorpay_signature,
+      },
+      idempotencyKey,
+    }),
 };
 
 // ---------------- administration ----------------

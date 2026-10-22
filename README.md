@@ -30,7 +30,7 @@ can never be double-booked.
 | **Dynamic pricing** | Deterministic engine: base × weekend × season × demand (own occupancy), clamped to min/max, per-night breakdown, service fee and tax, `BigDecimal` HALF_UP rounding, versioned immutable policies, price snapshot stored with every booking |
 | **Bookings** | Idempotent creation (`Idempotency-Key`), temporary inventory hold, authoritative price check, payment initiation, saga confirmation via payment events, cancellation policy (100% / 50% / 0%), auditable status history, recovery job for stuck/expired bookings |
 | **Events & e-mail** | RabbitMQ topic exchange with transactional outboxes in booking and payment services, publisher confirms, per-consumer queues with dead-letter queues and retries; notification-service sends HTML e-mails (confirmation, payment receipt, cancellation, failed payment, expired hold), suppressing duplicates when an event is redelivered; captured locally by Mailpit |
-| **Payments** | Explicit state machine, simulated provider behind a provider interface, idempotent charges, HMAC-signed timestamped webhooks with de-duplication, refunds (partial/full), reconciliation of timed-out charges, transactional outbox to the booking service |
+| **Payments** | Explicit state machine, provider interface with two gateways — simulated (default) and Razorpay test mode (server-created orders, Checkout, signature + server-side verification, capture, signed webhooks, refunds, automatic refund of late captures) — idempotent charges, HMAC-signed timestamped webhooks with de-duplication, refunds (partial/full), reconciliation of timed-out charges, transactional outbox to the booking service |
 | **Security** | RS256 JWT (JWKS), rotating refresh tokens in an HttpOnly SameSite=Strict cookie with reuse detection, BCrypt, account lockout, gateway rate limiting, CORS allow-list, roles (CUSTOMER / STAFF / ADMIN / SERVICE), ownership checks returning 404, service-to-service client credentials, no public admin creation |
 | **Platform** | Spring Cloud Gateway, Eureka discovery + client-side load balancing, correlation IDs end-to-end, RFC 9457 problem responses, health/readiness probes, Prometheus metrics, Flyway migrations, Docker Compose, GitHub Actions CI |
 | **Web app** | React + TypeScript: home, search, room details with live quote, register/sign-in, checkout, simulated payment, live confirmation, customer dashboard, booking details & cancellation, admin dashboard with charts, rooms editor, pricing, bookings, payments, users |
@@ -238,8 +238,10 @@ More (database, Eureka, routing, stuck holds, payments, migrations):
 
 ## Known limitations
 
-* The payment provider is **simulated**; integrating a real provider means implementing `PaymentProvider`
-  (and its webhook signature scheme). No real money or card data is ever handled.
+* Payments default to the **simulated** provider. A **Razorpay test-mode** gateway is implemented
+  (`GV_PAYMENT_PROVIDER=razorpay`) and tested against a fake Razorpay API, but has not been run against Razorpay's
+  real test API (no keys were available) — see [DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md#razorpay-test-mode).
+  No live keys are accepted and no real money or card data is handled.
 * Gateway rate limiting is in-memory (correct for one gateway instance; use Redis-backed limiting for several).
 * E-mails go to a local Mailpit inbox only; no real e-mail provider is configured.
 * No cloud deployment has been performed (a deployment path is documented); the CI workflow has not been run on GitHub.
