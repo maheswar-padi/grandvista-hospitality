@@ -1,0 +1,14 @@
+Load-balancing verification (2026-10-22, local Docker stack)
+
+$ docker compose up -d --scale room-service=2 --no-recreate
+Eureka ROOM-SERVICE instances: 3ad3f98cb461:room-service:8082 (172.19.0.7) UP, 05768994ab2a:room-service:8082 (172.19.0.10) UP
+
+Gateway -> room-service (lb://room-service), 60 x GET /api/v1/rooms?size=1, counted from each instance's
+/actuator/prometheus http_server_requests_seconds_count{uri="/api/v1/rooms"}:
+  instance-1 served 30, instance-2 served 30
+
+booking-service -> room-service (@LoadBalanced RestClient, http://room-service), during ./scripts/e2e-smoke.sh
+(52/52 passed with two instances), counted http_server_requests_seconds_count{uri=~"/internal/v1/holds..."}:
+  instance-1 4, instance-2 4
+
+$ docker compose up -d --scale room-service=1

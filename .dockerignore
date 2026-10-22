@@ -1,0 +1,12 @@
+**/target
+**/node_modules
+frontend/dist
+.git
+.idea
+.vscode
+.env
+.env.*
+infrastructure/secrets
+var
+docs
+**/*.log

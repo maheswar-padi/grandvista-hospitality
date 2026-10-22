@@ -1,0 +1,129 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  max-http-request-header-size: 16KB
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 15s
+          # Only these routes exist. /internal/** and service actuators are never routed.
+          routes:
+            - id: auth
+              uri: ${GV_ROUTE_AUTH:lb://auth-service}
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/admin/users/**
+            - id: rooms
+              uri: ${GV_ROUTE_ROOM:lb://room-service}
+              predicates:
+                - Path=/api/v1/rooms/**,/api/v1/room-types/**,/api/v1/amenities/**,/api/v1/media/**,/api/v1/admin/rooms/**,/api/v1/admin/room-types/**,/api/v1/admin/amenities/**,/api/v1/admin/pricing/**,/api/v1/admin/inventory/**
+            - id: bookings
+              uri: ${GV_ROUTE_BOOKING:lb://booking-service}
+              predicates:
+                - Path=/api/v1/bookings,/api/v1/bookings/**,/api/v1/admin/bookings/**
+            - id: payments
+              uri: ${GV_ROUTE_PAYMENT:lb://payment-service}
+              predicates:
+                - Path=/api/v1/payments/**,/api/v1/admin/payments/**
+            # Aggregated OpenAPI documents for the gateway's Swagger UI (development only).
+            - id: docs-auth
+              uri: ${GV_ROUTE_AUTH:lb://auth-service}
+              predicates:
+                - Path=/api-docs/auth-service
+              filters:
+                - SetPath=/v3/api-docs
+            - id: docs-room
+              uri: ${GV_ROUTE_ROOM:lb://room-service}
+              predicates:
+                - Path=/api-docs/room-service
+              filters:
+                - SetPath=/v3/api-docs
+            - id: docs-booking
+              uri: ${GV_ROUTE_BOOKING:lb://booking-service}
+              predicates:
+                - Path=/api-docs/booking-service
+              filters:
+                - SetPath=/v3/api-docs
+            - id: docs-payment
+              uri: ${GV_ROUTE_PAYMENT:lb://payment-service}
+              predicates:
+                - Path=/api-docs/payment-service
+              filters:
+                - SetPath=/v3/api-docs
+
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+
+gv:
+  gateway:
+    jwt-issuer: ${GV_JWT_ISSUER:grandvista-auth}
+    jwk-set-uri: ${GV_JWKS_URI:http://localhost:8081/oauth2/jwks}
+    cors-allowed-origins: ${GV_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+    trust-forwarded-for: ${GV_TRUST_FORWARDED_FOR:false}
+    max-request-size: 6MB
+    auth-rate-limit:
+      capacity: ${GV_AUTH_RATE_LIMIT:10}
+      period: 1m
+    api-rate-limit:
+      capacity: ${GV_API_RATE_LIMIT:300}
+      period: 1m
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
+    urls:
+      - name: auth-service
+        url: /api-docs/auth-service
+      - name: room-service
+        url: /api-docs/room-service
+      - name: booking-service
+        url: /api-docs/booking-service
+      - name: payment-service
+        url: /api-docs/payment-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-components: always
+      show-details: never
+
+info:
+  service:
+    name: ${spring.application.name}
+    description: Public API entry point
+
+logging:
+  pattern:
+    console: "%d{ISO8601} %5p [${spring.application.name}] %logger{36} - %m%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

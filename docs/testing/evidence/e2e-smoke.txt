@@ -1,0 +1,79 @@
+
+0. Platform health
+  ✔ gateway is healthy
+  ✔ unknown internal path is not exposed
+
+1. Room search and availability
+  ✔ search with dates succeeds
+  stay 2027-04-23 → 2027-04-25, room 4bfac564-c973-4517-8871-991d760720cf (11 rooms available)
+  ✔ results carry a dynamic stay price
+  ✔ invalid range is rejected
+  ✔ invalid range has problem code
+
+2. Registration, login and session refresh
+  ✔ customer token issued
+  ✔ profile is protected and readable
+  ✔ refresh cookie rotates session
+  ✔ unauthenticated booking list is rejected
+  ✔ customer cannot use admin API
+
+3. Dynamic pricing quote
+  ✔ quote succeeds
+  ✔ quote has one rate per night
+  ✔ total = subtotal + fee + taxes
+
+4. Booking with idempotency and inventory hold
+  ✔ booking created
+  ✔ booking awaits payment
+  ✔ price snapshot stored
+  ✔ retry with same key returns the same booking
+  ✔   ... same id
+  ✔ held room disappears from availability
+
+5. Contention: another customer cannot take the held room
+  ✔ overlapping booking is refused
+  ✔   ... with ROOM_UNAVAILABLE
+  ✔ other customer cannot read the booking
+  ✔ other customer cannot pay the booking
+
+6. Simulated payment and authoritative confirmation
+  ✔ payment succeeds
+  ✔   ... status SUCCEEDED
+  ✔   ... marked simulated
+  ✔ payment retry is idempotent
+  ✔ booking becomes CONFIRMED (via outbox event)
+  ✔ booking appears in customer history
+
+7. Cancellation, refund and inventory release
+  ✔ far-future stay gets a full refund quote
+  ✔ cancellation completes
+  ✔   ... status CANCELLED
+  ✔   ... refund equals total
+  ✔ payment is REFUNDED
+  ✔ room is available again
+
+8. Failed payment releases the hold
+  ✔ second booking created
+  ✔ declined card fails
+  ✔ booking becomes PAYMENT_FAILED
+  ✔ room released after failure
+
+9. Asynchronous payment confirmed by signed webhook
+  ✔ third booking created
+  ✔ async payment starts PENDING
+  ✔ booking confirmed after the webhook
+  ✔ forged webhook is rejected
+
+10. Administration
+  ✔ administrator can sign in
+  ✔ inventory summary
+  ✔ booking summary
+  ✔ payment summary
+  ✔ room put into maintenance
+  ✔ maintenance room not offered
+  ✔ room back to active
+  ✔ nobody can edit payment outcomes
+
+Result
+  passed: 52   failed: 0
+END-TO-END SMOKE TEST PASSED

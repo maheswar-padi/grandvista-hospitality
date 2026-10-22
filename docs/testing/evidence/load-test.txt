@@ -1,0 +1,13 @@
+GrandVista load test against http://localhost:8080/api/v1 — 20 virtual users for 30s
+
+Scenario 1: availability search + price quotes
+  endpoint          requests   req/s     p50 ms   p95 ms   p99 ms   max ms   statuses
+  search               16799    559.7       17       47       85      374   200:16799
+  quote                16799    559.7       11       32       59      310   200:16799
+  total 33598 requests in 30.0s = 1119.4 req/s
+
+Scenario 2: 10 customers book the same room for the same dates simultaneously
+  stay 2027-10-14 → 2027-10-16; contenders 10
+  accepted (201): 1   refused (409): 9   other: 0
+  response codes: ROOM_UNAVAILABLE, ROOM_UNAVAILABLE, ROOM_UNAVAILABLE, ROOM_UNAVAILABLE, ROOM_UNAVAILABLE, ROOM_UNAVAILABLE, PENDING_PAYMENT, ROOM_UNAVAILABLE, ROOM_UNAVAILABLE, ROOM_UNAVAILABLE
+  ✔ exactly one booking won — no double booking

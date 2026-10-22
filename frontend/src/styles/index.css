@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/cormorant-garamond/500.css";
+@import "@fontsource/cormorant-garamond/600.css";
+
+/* GrandVista design tokens. Text/background pairs are chosen for WCAG AA contrast:
+   ink-900 on ivory (15.8:1), ink-600 on white (9.4:1), gold-700 on white (6.2:1), white on ink-900 (16:1). */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+
+  --color-ivory: #faf8f4;
+  --color-ink-50: #f3f5f9;
+  --color-ink-100: #e3e8f0;
+  --color-ink-200: #c5cfdd;
+  --color-ink-300: #9aa9c0;
+  --color-ink-400: #6b7f9c;
+  --color-ink-500: #4a5d7c;
+  --color-ink-600: #364863;
+  --color-ink-700: #283850;
+  --color-ink-800: #1b2940;
+  --color-ink-900: #121d30;
+  --color-ink-950: #0b1322;
+
+  --color-gold-50: #fbf7ef;
+  --color-gold-100: #f4ead6;
+  --color-gold-200: #e8d3ab;
+  --color-gold-300: #d9b77a;
+  --color-gold-400: #c99d58;
+  --color-gold-500: #b08447;
+  --color-gold-600: #946b39;
+  --color-gold-700: #77542f;
+
+  --shadow-card: 0 1px 2px rgb(18 29 48 / 0.06), 0 8px 24px -12px rgb(18 29 48 / 0.18);
+  --radius-card: 1rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-ivory font-sans text-ink-900;
+  }
+  h1, h2, h3 {
+    @apply font-display tracking-tight text-ink-900;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-gold-500);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  .card {
+    @apply rounded-2xl border border-ink-100 bg-white shadow-[var(--shadow-card)];
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-gold-700;
+  }
+  .skeleton {
+    @apply animate-pulse rounded-md bg-ink-100;
+  }
+}

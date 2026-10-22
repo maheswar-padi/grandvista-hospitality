@@ -1,0 +1,36 @@
+{
+  "allocationId": "3b0b4c2e-6f9e-4d4a-9a40-6d1b7f1e2a11",
+  "bookingId": "8c2f8a9e-7b1d-4b9a-8d65-1a2b3c4d5e6f",
+  "roomId": "5e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+  "roomNumber": "201",
+  "roomName": "Deluxe King, City View",
+  "roomTypeName": "Deluxe Room",
+  "checkIn": "2026-12-03",
+  "checkOut": "2026-12-05",
+  "guests": 2,
+  "status": "HELD",
+  "holdExpiresAt": "2026-11-01T10:15:00Z",
+  "confirmedAt": null,
+  "quote": {
+    "currency": "INR",
+    "checkIn": "2026-12-03",
+    "checkOut": "2026-12-05",
+    "nights": 2,
+    "nightlyRates": [
+      {"date": "2026-12-03", "baseRate": 7200.00, "dayMultiplier": 1, "seasonName": null, "seasonMultiplier": 1,
+       "occupancy": 0.2500, "demandMultiplier": 1.0000, "limitApplied": null, "rate": 7200.00},
+      {"date": "2026-12-04", "baseRate": 7200.00, "dayMultiplier": 1.1500, "seasonName": null, "seasonMultiplier": 1,
+       "occupancy": 0.5000, "demandMultiplier": 1.1000, "limitApplied": null, "rate": 9108.00}
+    ],
+    "subtotal": 16308.00,
+    "serviceFee": 815.40,
+    "taxes": 2054.81,
+    "total": 19178.21,
+    "averageNightlyRate": 8154.00,
+    "serviceFeeRate": 0.0500,
+    "taxRate": 0.1200,
+    "pricingPolicyVersion": 1,
+    "quotedAt": "2026-11-01T10:00:00Z",
+    "validUntil": "2026-11-01T10:15:00Z"
+  }
+}

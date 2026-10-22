@@ -1,0 +1,18 @@
+{
+  "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  "bookingId": "8c2f8a9e-7b1d-4b9a-8d65-1a2b3c4d5e6f",
+  "bookingReference": "GV-7KQ2MX",
+  "customerId": "1f2e3d4c-5b6a-4978-8a7b-6c5d4e3f2a1b",
+  "amount": 19178.21,
+  "currency": "INR",
+  "status": "CREATED",
+  "provider": "SIMULATED",
+  "simulated": true,
+  "providerReference": null,
+  "failureCode": null,
+  "failureMessage": null,
+  "refundedAmount": 0,
+  "expiresAt": "2026-11-01T10:15:00Z",
+  "createdAt": "2026-11-01T10:00:01Z",
+  "updatedAt": "2026-11-01T10:00:01Z"
+}

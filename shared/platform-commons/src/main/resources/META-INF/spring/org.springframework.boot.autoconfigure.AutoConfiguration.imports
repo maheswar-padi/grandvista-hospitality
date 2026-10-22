@@ -1,0 +1,2 @@
+com.grandvista.platform.web.PlatformWebAutoConfiguration
+com.grandvista.platform.security.PlatformSecurityAutoConfiguration

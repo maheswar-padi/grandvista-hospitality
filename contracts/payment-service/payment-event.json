@@ -1,0 +1,12 @@
+{
+  "eventId": "0d1c2b3a-4f5e-4d6c-8b7a-9f8e7d6c5b4a",
+  "eventType": "PAYMENT_SUCCEEDED",
+  "schemaVersion": 1,
+  "paymentId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  "bookingId": "8c2f8a9e-7b1d-4b9a-8d65-1a2b3c4d5e6f",
+  "status": "SUCCEEDED",
+  "amount": 19178.21,
+  "currency": "INR",
+  "failureCode": null,
+  "occurredAt": "2026-11-01T10:02:00Z"
+}

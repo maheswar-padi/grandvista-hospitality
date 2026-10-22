@@ -1,0 +1,60 @@
+# Implementation checklist
+
+`[x]` = done **and** verified by the evidence named · `[~]` = implemented, not fully verified · `[ ]` = not done.
+Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TESTING.md).
+
+## Backend (verified: `mvn -B clean verify` — 148 tests, 0 failures, 0 errors, 0 skipped; Testcontainers PostgreSQL 16)
+- [x] platform-commons (correlation IDs, RFC 9457 errors, JWT wiring, service clients, retry, Specs) — 6 tests
+- [x] discovery-server (Eureka, HTTP Basic) — 2 tests
+- [x] api-gateway (routes, JWT pre-check, CORS, rate limit, size limit, problem errors) — 9 tests
+- [x] auth-service (RS256/JWKS, rotating refresh cookie + reuse detection, lockout, roles, service tokens) — 17 tests
+- [x] room-service (search, availability, pricing engine, holds, exclusion constraint, scheduled hold sweeper, media, admin) — 31 tests
+- [x] booking-service (saga, idempotency, cancellation policy, scheduled recovery job, inbox, history, timeouts) — 45 tests
+- [x] payment-service (state machine, simulated provider, webhooks incl. concurrent duplicates, refunds, outbox, reconciliation) — 38 tests
+- [x] Contracts verified provider + consumer side (`/contracts`)
+
+## Frontend (verified: lint, typecheck, build, Vitest 24 tests incl. axe checks)
+- [x] All customer pages and admin dashboard implemented and integrated with the real API
+- [x] Browser-verified on the Docker stack: search → details/quote → register → checkout → async simulated
+      payment → live confirmation → dashboard; admin overview + rooms/pricing/bookings/payments/users
+- [x] Booking history: upcoming / past / all, empty state, pagination, error + retry, final statuses
+      (`account.test.tsx`, `bookingHistoryIsPrivatePaginatedAndShowsFinalStatuses`, live browser check)
+- [x] Responsive: every page inspected at 375, 390, 430, 768, 1024, 1440 px (Chromium emulation, not physical
+      devices); no horizontal overflow after fixes
+
+## Containers & runtime (verified on Docker 29.9, 4 GB VM)
+- [x] 7 images rebuilt (multi-stage, non-root); `docker compose config` valid
+- [x] 8 containers healthy; 5 applications UP in Eureka
+- [x] `scripts/e2e-smoke.sh` — 52/52 checks passed (also 52/52 with two room-service instances)
+- [x] Load balancing with 2 room-service instances: gateway 30/30, booking→room 4/4 ([evidence](testing/evidence/load-balancing.txt))
+- [x] Load test (20 VUs, 30 s, limits temporarily raised then restored to 10/300): 1,119 req/s, p95 search 47 ms /
+      quote 32 ms, 0 errors; 10 concurrent bookings → 1 accepted, 9 refused
+- [x] Consistency audit `scripts/consistency-audit.mjs` — 18 checks passed ([evidence](testing/evidence/consistency-audit.txt))
+- [x] Correlation ID traced across gateway, booking-service and room-service logs
+- [x] Hold expiry: unpaid booking `GV-YAVVSA` reached `EXPIRED` and its hold was released. It expired ~4 min late
+      because the Docker VM was suspended while the host slept (no log activity, then Eureka re-registration);
+      the scheduled sweeper and recovery job are now covered by `HoldExpirySchedulingIntegrationTest` and
+      `BookingRecoverySchedulingTest`
+
+## Defects found and fixed
+- Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
+  exclusion-constraint deadlock (per-room row lock) · LocalDate JSON as arrays in load-balanced clients ·
+  Spring Data `CheckIn` keyword parsing · Eureka UP/DOWN health loop · null-parameter JPQL filters returning 500
+- This phase: orphan-payment refund used booking fields that can be null (now uses the event's payment id and
+  amount) · header overflow at 768 px for administrators (nav breakpoint moved to `lg`) · admin grid widened by
+  its nav scroller · admin tables 706 px wide on a 375 px phone (screen-reader-only header escaping an
+  unpositioned scroll container) · dialog not scrollable on short screens · 20 px back-link tap targets ·
+  consistency-audit script fixes (dates outside the booking window, a vacuous check, a crash)
+
+## Documentation
+- [x] README.md · docs/architecture/ARCHITECTURE.md · contracts/README.md · CI workflow
+- [x] docs/api/API_REFERENCE.md · docs/database/DATABASE.md · docs/testing/TESTING.md (+ `evidence/`)
+- [x] docs/deployment/DEPLOYMENT.md · docs/deployment/OPERATIONS.md · docs/security/SECURITY.md
+- [x] docs/DEMO_SCRIPT.md · docs/TRACEABILITY_MATRIX.md · docs/project-report/PROJECT_REPORT.md
+- [ ] Report: student details, institutional pages and screenshots (placeholders marked `[to be completed]`)
+
+## Not done / limitations
+- Real payment provider (simulated only) · cloud deployment (none performed) · CI workflow never run on GitHub ·
+  in-memory gateway rate limiting; gateway and Eureka not run as multiple instances · one PostgreSQL server for
+  four databases · no e-mail notifications or message broker · responsive checks by emulation only ·
+  nothing committed to Git yet

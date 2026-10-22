@@ -1,0 +1,34 @@
+GrandVista booking-consistency audit against http://localhost:8080/api/v1
+
+1. Ten customers race for the same room and dates
+  ✔ exactly one accepted — 201×1, 409×9, other×0
+  ✔ the nine others told ROOM_UNAVAILABLE — 9 refusal(s)
+  ✔ room no longer available for those dates
+
+2. One request sent five times concurrently with the same Idempotency-Key
+  ✔ every response refers to the same single booking — statuses 201,200,200,200,200
+  ✔ customer history contains it once — 1 booking(s)
+
+3. Back-to-back stays on the same room
+  ✔ both accepted (check-out day is free for the next guest) — 201, 201
+  ✔ an overlapping third stay is refused — 409
+
+4. Cancellation racing a new booking for the same dates (5 rounds)
+  ✔ round 1: never two active bookings — cancel 200 → CANCELLED; challenger 409 ROOM_UNAVAILABLE
+  ✔ round 2: never two active bookings — cancel 200 → CANCELLED; challenger 201
+  ✔ round 3: never two active bookings — cancel 200 → CANCELLED; challenger 201
+  ✔ round 4: never two active bookings — cancel 200 → CANCELLED; challenger 201
+  ✔ round 5: never two active bookings — cancel 200 → CANCELLED; challenger 201
+
+5. Payment failure after the hold
+  ✔ room held while awaiting payment
+  ✔ payment declined — FAILED
+  ✔ booking becomes PAYMENT_FAILED
+  ✔ room available again
+
+6. Five concurrent payment confirmations for one booking
+  ✔ payment authorised exactly once — starts=1, status=SUCCEEDED, responses=200,200,200,409,409
+  ✔ booking confirmed
+  ✔ confirmed exactly once in the audit trail — 1
+
+AUDIT PASSED

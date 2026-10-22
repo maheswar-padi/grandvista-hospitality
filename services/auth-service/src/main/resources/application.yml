@@ -1,0 +1,124 @@
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+spring:
+  application:
+    name: auth-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/grandvista_auth}
+    username: ${DB_USERNAME:grandvista_auth}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 5000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    healthcheck:
+      enabled: true
+    registry-fetch-interval-seconds: 10
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+gv:
+  security:
+    jwt:
+      issuer: ${GV_JWT_ISSUER:grandvista-auth}
+  auth:
+    access-token-ttl: ${GV_ACCESS_TOKEN_TTL:15m}
+    service-token-ttl: 5m
+    refresh-token-ttl: ${GV_REFRESH_TOKEN_TTL:7d}
+    keys:
+      private-key-location: ${GV_JWT_PRIVATE_KEY_PATH:}
+      public-key-location: ${GV_JWT_PUBLIC_KEY_PATH:}
+      allow-ephemeral: ${GV_JWT_ALLOW_EPHEMERAL_KEY:true}
+    cookie:
+      secure: ${GV_COOKIE_SECURE:true}
+    lockout:
+      max-failed-attempts: 5
+      lock-duration: 15m
+    bootstrap-admin:
+      email: ${GV_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${GV_BOOTSTRAP_ADMIN_PASSWORD:}
+      full-name: ${GV_BOOTSTRAP_ADMIN_NAME:Platform Administrator}
+    service-clients:
+      - client-id: booking-service
+        client-secret: ${BOOKING_SERVICE_CLIENT_SECRET:}
+      - client-id: payment-service
+        client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET:}
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
+
+management:
+  health:
+    # The Eureka indicator reports the status Eureka currently holds for this instance. Feeding it back
+    # into the health that eureka.client.healthcheck publishes creates an UP/DOWN loop, so it is excluded;
+    # Eureka then reflects real dependencies (database, disk).
+    eureka:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-components: always
+      show-details: never
+  info:
+    env:
+      enabled: true
+
+info:
+  service:
+    name: ${spring.application.name}
+    description: Identity and access tokens
+
+logging:
+  pattern:
+    # Plain-text default; set LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs for JSON (ECS) logs.
+    console: "%d{ISO8601} %5p [${spring.application.name}] [cid=%X{correlationId:-}] %logger{36} - %m%n"
+  level:
+    org.hibernate.SQL: warn
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+gv:
+  auth:
+    keys:
+      allow-ephemeral: false
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
