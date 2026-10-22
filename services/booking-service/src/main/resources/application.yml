@@ -57,11 +57,12 @@ eureka:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
     healthcheck:
       enabled: true
-    registry-fetch-interval-seconds: 10
+    registry-fetch-interval-seconds: 5
   instance:
     prefer-ip-address: true
-    lease-renewal-interval-in-seconds: 10
-    lease-expiration-duration-in-seconds: 30
+    lease-renewal-interval-in-seconds: 5
+    # a crashed instance (no deregistration) is evicted after 15 s
+    lease-expiration-duration-in-seconds: 15
 
 gv:
   security:
@@ -97,6 +98,45 @@ gv:
       base-url: ${GV_PAYMENT_SERVICE_URL:http://payment-service}
       connect-timeout: 2s
       read-timeout: 8s
+
+spring.cloud.loadbalancer.cache.ttl: 5s
+
+# Resilience4j policies for calls to room-service and payment-service (see client/Resilience.java).
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-failure-predicate: com.grandvista.booking.client.TransientFailure
+        # A circuit state is visible in metrics; it must not make this instance DOWN in Eureka.
+        register-health-indicator: false
+    instances:
+      room-service:
+        base-config: default
+      payment-service:
+        base-config: default
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 2s
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.2
+        retry-exception-predicate: com.grandvista.booking.client.TransientFailure
+    instances:
+      room-service:
+        base-config: default
+      payment-service:
+        base-config: default
 
 springdoc:
   api-docs:

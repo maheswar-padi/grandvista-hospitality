@@ -186,9 +186,9 @@ Details, coverage of scenarios and the exact verification log: [docs/testing/TES
 | What | URL | Notes |
 |---|---|---|
 | Web application | http://localhost:3000 | nginx serving the SPA and proxying `/api` |
-| API gateway | http://localhost:8080/api/v1 | the only public API entry point |
+| API (load balancer → 2 gateways) | http://localhost:8080/api/v1 | the only public API entry point; `X-Gateway-Instance` shows which gateway answered |
 | Swagger UI (all services) | http://localhost:8080/swagger-ui.html | development only (`API_DOCS_ENABLED`) |
-| Eureka dashboard | http://localhost:8761 | loopback only, HTTP Basic (`EUREKA_USERNAME`/`EUREKA_PASSWORD` from `.env`) |
+| Eureka dashboards (2 peers) | http://localhost:8761 · http://localhost:8762 | loopback only, HTTP Basic (`EUREKA_USERNAME`/`EUREKA_PASSWORD` from `.env`) |
 | PostgreSQL (one server per service) | auth 5433 · room 5434 · booking 5435 · payment 5436 · notification 5437 | loopback only, per-service credentials in `.env` |
 | RabbitMQ management UI | http://localhost:15672 | loopback only, `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` from `.env` |
 | Mailpit (captured e-mails) | http://localhost:8025 | loopback only; every e-mail the platform sends lands here |
@@ -242,10 +242,12 @@ More (database, Eureka, routing, stuck holds, payments, migrations):
   (`GV_PAYMENT_PROVIDER=razorpay`) and tested against a fake Razorpay API, but has not been run against Razorpay's
   real test API (no keys were available) — see [DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md#razorpay-test-mode).
   No live keys are accepted and no real money or card data is handled.
-* Gateway rate limiting is in-memory (correct for one gateway instance; use Redis-backed limiting for several).
+* Gateway rate limiting is in-memory per gateway instance; with two gateways a client can make up to twice the limit
+  (a Redis-backed limiter would share it).
 * E-mails go to a local Mailpit inbox only; no real e-mail provider is configured.
 * No cloud deployment has been performed (a deployment path is documented); the CI workflow has not been run on GitHub.
-* Gateway and Eureka were run as single instances; multi-instance was verified for room-service only.
+* High availability covers Eureka (2), gateways (2) and booking-service (2); auth, room, payment, notification,
+  RabbitMQ and the databases run as single instances (memory limit of the demonstration laptop).
 * Responsive layout verified by browser emulation at 375–1440 px, not on physical devices.
 * Load figures come from one laptop and are not production capacity estimates.
 * Full list with mitigations: [docs/PROJECT_CHECKLIST.md](docs/PROJECT_CHECKLIST.md) and the traceability matrix.

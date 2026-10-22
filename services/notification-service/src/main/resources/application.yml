@@ -70,8 +70,9 @@ eureka:
     registry-fetch-interval-seconds: 10
   instance:
     prefer-ip-address: true
-    lease-renewal-interval-in-seconds: 10
-    lease-expiration-duration-in-seconds: 30
+    lease-renewal-interval-in-seconds: 5
+    # a crashed instance (no deregistration) is evicted after 15 s
+    lease-expiration-duration-in-seconds: 15
 
 gv:
   security:

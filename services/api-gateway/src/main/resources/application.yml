@@ -3,6 +3,22 @@ server:
   shutdown: graceful
   max-http-request-header-size: 16KB
 
+# Retry a request on another instance only when the connection could not be established (the request never
+# reached a service), so it is safe for every method, including POST. 5xx answers are never retried here.
+x-connect-retry: &connect-retry
+  name: Retry
+  args:
+    retries: 2
+    methods: GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE
+    series: ""
+    statuses: ""
+    exceptions: java.net.ConnectException,java.net.NoRouteToHostException,io.netty.channel.ConnectTimeoutException
+    backoff:
+      firstBackoff: 50ms
+      maxBackoff: 500ms
+      factor: 2
+      basedOnPreviousValue: false
+
 spring:
   application:
     name: api-gateway
@@ -11,30 +27,65 @@ spring:
       server:
         webflux:
           httpclient:
-            connect-timeout: 2000
+            # Inside the Docker network a healthy instance accepts in a few ms; 1 s bounds the cost of trying a
+            # crashed instance before the retry moves to another one.
+            connect-timeout: 1000
             response-timeout: 15s
+          # Tells clients (and the failover demo) which gateway instance answered.
+          default-filters:
+            - AddResponseHeader=X-Gateway-Instance, ${GV_INSTANCE_NAME:api-gateway}
           # Only these routes exist. /internal/** and service actuators are never routed.
           routes:
             - id: auth
               uri: ${GV_ROUTE_AUTH:lb://auth-service}
               predicates:
                 - Path=/api/v1/auth/**,/api/v1/admin/users/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: auth-service
+                    fallbackUri: forward:/fallback/auth-service
+                - *connect-retry
             - id: rooms
               uri: ${GV_ROUTE_ROOM:lb://room-service}
               predicates:
                 - Path=/api/v1/rooms/**,/api/v1/room-types/**,/api/v1/amenities/**,/api/v1/media/**,/api/v1/admin/rooms/**,/api/v1/admin/room-types/**,/api/v1/admin/amenities/**,/api/v1/admin/pricing/**,/api/v1/admin/inventory/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: room-service
+                    fallbackUri: forward:/fallback/room-service
+                - *connect-retry
             - id: bookings
               uri: ${GV_ROUTE_BOOKING:lb://booking-service}
               predicates:
                 - Path=/api/v1/bookings,/api/v1/bookings/**,/api/v1/admin/bookings/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: booking-service
+                    fallbackUri: forward:/fallback/booking-service
+                - *connect-retry
             - id: payments
               uri: ${GV_ROUTE_PAYMENT:lb://payment-service}
               predicates:
                 - Path=/api/v1/payments/**,/api/v1/admin/payments/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: payment-service
+                    fallbackUri: forward:/fallback/payment-service
+                - *connect-retry
             - id: notifications
               uri: ${GV_ROUTE_NOTIFICATION:lb://notification-service}
               predicates:
                 - Path=/api/v1/admin/notifications,/api/v1/admin/notifications/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: notification-service
+                    fallbackUri: forward:/fallback/notification-service
+                - *connect-retry
             # Aggregated OpenAPI documents for the gateway's Swagger UI (development only).
             - id: docs-auth
               uri: ${GV_ROUTE_AUTH:lb://auth-service}
@@ -67,6 +118,28 @@ spring:
               filters:
                 - SetPath=/v3/api-docs
 
+# Circuit breaker per downstream service (opened by connection failures and timeouts, not by HTTP 5xx answers,
+# whose problem bodies are passed through). The time limiter is above the HTTP response timeout (15 s), so the
+# HTTP timeout stays the one that applies.
+# Instances from Eureka are cached briefly so a stopped instance stops receiving traffic within seconds.
+spring.cloud.loadbalancer.cache.ttl: 5s
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 16s
+
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:true}
@@ -75,7 +148,7 @@ eureka:
     registry-fetch-interval-seconds: 5
   instance:
     prefer-ip-address: true
-    lease-renewal-interval-in-seconds: 10
+    lease-renewal-interval-in-seconds: 5
 
 gv:
   gateway:

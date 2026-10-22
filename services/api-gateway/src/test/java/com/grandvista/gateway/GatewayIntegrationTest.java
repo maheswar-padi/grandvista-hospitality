@@ -35,6 +35,7 @@ class GatewayIntegrationTest {
 
     static final RSAKey KEY;
     static final DisposableServer UPSTREAM;
+    static final java.util.concurrent.atomic.AtomicInteger FLAKY_CALLS = new java.util.concurrent.atomic.AtomicInteger();
 
     static {
         try {
@@ -46,6 +47,13 @@ class GatewayIntegrationTest {
         UPSTREAM = HttpServer.create().port(0).route(routes -> routes
                 .get("/oauth2/jwks", (req, res) -> res.header("Content-Type", "application/json").sendString(
                         reactor.core.publisher.Mono.just(jwks)))
+                .post("/api/v1/bookings/flaky-503", (req, res) -> {
+                    FLAKY_CALLS.incrementAndGet();
+                    return res.status(503).header("Content-Type", "application/problem+json").sendString(
+                            reactor.core.publisher.Mono.just("{\"status\":503,\"code\":\"DEPENDENCY_UNAVAILABLE\"}"));
+                })
+                .get("/api/v1/rooms/slow", (req, res) -> res.header("Content-Type", "application/json").sendString(
+                        reactor.core.publisher.Mono.just("{\"slow\":true}").delayElement(java.time.Duration.ofMillis(1500))))
                 .route(req -> true, (req, res) -> res.header("Content-Type", "application/json").sendString(
                         reactor.core.publisher.Mono.just("{\"upstreamPath\":\"" + req.uri() + "\",\"auth\":"
                                 + req.requestHeaders().contains("Authorization") + ",\"cid\":\""
@@ -65,6 +73,7 @@ class GatewayIntegrationTest {
             registry.add(route, () -> base);
         }
         registry.add("GV_JWKS_URI", () -> base + "/oauth2/jwks");
+        registry.add("GV_ROUTE_NOTIFICATION", () -> "http://127.0.0.1:1"); // nothing listens: connection refused
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("GV_AUTH_RATE_LIMIT", () -> "3");
         registry.add("GV_CORS_ALLOWED_ORIGINS", () -> "http://localhost:5173");
@@ -183,5 +192,34 @@ class GatewayIntegrationTest {
     void unknownRoutesReturnProblemJson() {
         client.get().uri("/api/v2/whatever").exchange().expectStatus().isUnauthorized();
         client.get().uri("/not-an-api").exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void unreachableServiceGetsAFastProblemFallbackWithRetryAfter() throws Exception {
+        String staff = token(List.of("STAFF"), "grandvista-api", Instant.now().plusSeconds(600));
+        client.get().uri("/api/v1/admin/notifications").header("Authorization", "Bearer " + staff).exchange()
+                .expectStatus().isEqualTo(503)
+                .expectHeader().valueEquals("Retry-After", "10")
+                .expectHeader().contentType("application/problem+json")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("SERVICE_UNAVAILABLE")
+                .jsonPath("$.service").isEqualTo("notification-service");
+    }
+
+    @Test
+    void downstream5xxAnswersArePassedThroughAndNeverRetriedForPost() throws Exception {
+        FLAKY_CALLS.set(0);
+        client.post().uri("/api/v1/bookings/flaky-503").header("Authorization", "Bearer " + customerToken())
+                .header("Content-Type", "application/json").bodyValue("{}").exchange()
+                .expectStatus().isEqualTo(503)
+                .expectBody().jsonPath("$.code").isEqualTo("DEPENDENCY_UNAVAILABLE");
+        org.assertj.core.api.Assertions.assertThat(FLAKY_CALLS.get()).isEqualTo(1);
+    }
+
+    @Test
+    void circuitBreakerTimeLimiterDoesNotCutOffSlowButHealthyResponses() {
+        client.get().uri("/api/v1/rooms/slow").exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.slow").isEqualTo(true);
     }
 }

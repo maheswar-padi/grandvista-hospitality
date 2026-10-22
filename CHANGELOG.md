@@ -5,6 +5,22 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Phase 4 — High availability and resilience
+- **Added:** two Eureka servers replicating to each other (`EUREKA_PEER_URL`; clients list both); two API gateways
+  behind a new nginx load balancer `gateway-lb` (public port 8080; the frontend's nginx also balances both);
+  `X-Gateway-Instance` response header; two booking-service replicas.
+- **Added:** Resilience4j. Gateway: circuit breaker per route with a `503 SERVICE_UNAVAILABLE` + `Retry-After`
+  fallback, and a retry that re-sends a request to another instance only when the connection failed. Booking
+  service: circuit breaker + retry (transient failures only) for room/payment calls, replacing the hand-written
+  `Retrier` (removed from platform-commons with its 4 tests).
+- **Added:** `scripts/failover-demo.sh` and its recorded output.
+- **Fixed (found by the failover demo):** a request to a killed booking replica failed with 503 because
+  `NoRouteToHostException` was not retried; requests to a crashed instance cost 2 s each until Eureka evicted it.
+  Now: connect-failure retry covers it, gateway connect timeout 1 s, leases 5 s/15 s, Eureka eviction every 5 s
+  without the read-only response cache, load-balancer cache 5 s.
+- **Verified:** backend 177 tests, 0 failures; e2e 56/56; failover run A 99/100 requests + 4/4 bookings (one request
+  in flight to the killed gateway got 504), run B 100/100 + 4/4.
+
 ### Phase 3 — Payment gateways (simulated + Razorpay test mode)
 - **Added:** Razorpay test-mode gateway behind the existing `PaymentProvider` interface, selected with
   `GV_PAYMENT_PROVIDER` (`simulated` default, `razorpay`). New `POST /api/v1/payments/{id}/checkout` creates the

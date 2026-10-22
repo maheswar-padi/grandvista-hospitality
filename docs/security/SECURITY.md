@@ -123,7 +123,7 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
 |---|---|---|
 | Access tokens remain valid up to 15 min after logout or role change | Low | short TTL; add a `jti` deny-list or shorter TTL if needed |
 | Gateway trusts the right-most `X-Forwarded-For` (`GV_TRUST_FORWARDED_FOR=true` in Compose); port 8080 is also published, so a client calling the gateway directly can choose its rate-limit key | Medium | in production only the reverse proxy may reach the gateway (private network) |
-| In-memory rate limiting is per gateway instance | Low | Redis-backed limiter for several instances |
+| In-memory rate limiting is per gateway instance — with 2 gateways a client gets up to 2× the limit | Low | Redis-backed limiter shared by all instances |
 | Account lockout can be triggered by others (targeted lock-out) | Low | lockout is temporary (15 min); add CAPTCHA/risk-based checks in production |
 | Registration reveals whether an e-mail is registered (409) | Low | common trade-off for usability; could send an e-mail instead |
 | Swagger UI and OpenAPI documents are public in development | Low | disabled by `prod` profile / `API_DOCS_ENABLED=false` |

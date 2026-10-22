@@ -4,7 +4,9 @@ import com.grandvista.booking.client.PaymentServiceClient;
 import com.grandvista.booking.client.RoomServiceClient;
 import com.grandvista.platform.client.CorrelationIdPropagationInterceptor;
 import com.grandvista.platform.client.HttpClients;
-import com.grandvista.platform.client.Retrier;
+import com.grandvista.booking.client.Resilience;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.RetryRegistry;
 import com.grandvista.platform.client.ServiceAuthProperties;
 import com.grandvista.platform.client.ServiceTokenInterceptor;
 import com.grandvista.platform.client.ServiceTokenProvider;
@@ -48,20 +50,20 @@ public class AppConfig {
 
     /** Bounded retries (3 attempts, exponential backoff with jitter) for idempotent internal calls only. */
     @Bean
-    Retrier retrier() {
-        return new Retrier(Retrier.Policy.defaults());
+    Resilience resilience(CircuitBreakerRegistry circuitBreakers, RetryRegistry retries) {
+        return new Resilience(circuitBreakers, retries);
     }
 
     @Bean
     RoomServiceClient roomServiceClient(@LoadBalanced RestClient.Builder builder, ServiceTokenProvider tokens,
-            BookingProperties properties, Retrier retrier) {
-        return new RoomServiceClient(client(builder, tokens, properties.rooms()), retrier);
+            BookingProperties properties, Resilience resilience) {
+        return new RoomServiceClient(client(builder, tokens, properties.rooms()), resilience);
     }
 
     @Bean
     PaymentServiceClient paymentServiceClient(@LoadBalanced RestClient.Builder builder, ServiceTokenProvider tokens,
-            BookingProperties properties, Retrier retrier) {
-        return new PaymentServiceClient(client(builder, tokens, properties.payments()), retrier);
+            BookingProperties properties, Resilience resilience) {
+        return new PaymentServiceClient(client(builder, tokens, properties.payments()), resilience);
     }
 
     private static RestClient client(RestClient.Builder builder, ServiceTokenProvider tokens,

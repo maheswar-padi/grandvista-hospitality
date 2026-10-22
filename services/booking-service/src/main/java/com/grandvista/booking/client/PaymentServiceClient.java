@@ -1,6 +1,5 @@
 package com.grandvista.booking.client;
 
-import com.grandvista.platform.client.Retrier;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
@@ -28,31 +27,31 @@ public class PaymentServiceClient {
     }
 
     private final RestClient http;
-    private final Retrier retrier;
+    private final Resilience resilience;
 
-    public PaymentServiceClient(RestClient http, Retrier retrier) {
+    public PaymentServiceClient(RestClient http, Resilience resilience) {
         this.http = http;
-        this.retrier = retrier;
+        this.resilience = resilience;
     }
 
     public Payment create(CreatePayment request) {
-        return RemoteCalls.call(SERVICE, "create", retrier, () -> http.post().uri("/internal/v1/payments")
+        return RemoteCalls.call(SERVICE, "create", resilience, () -> http.post().uri("/internal/v1/payments")
                 .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(Payment.class));
     }
 
     public Payment getByBooking(UUID bookingId) {
-        return RemoteCalls.call(SERVICE, "get", retrier, () -> http.get()
+        return RemoteCalls.call(SERVICE, "get", resilience, () -> http.get()
                 .uri("/internal/v1/payments/by-booking/{bookingId}", bookingId).retrieve().body(Payment.class));
     }
 
     public Payment cancel(UUID paymentId, String reason) {
-        return RemoteCalls.call(SERVICE, "cancel", retrier, () -> http.post()
+        return RemoteCalls.call(SERVICE, "cancel", resilience, () -> http.post()
                 .uri("/internal/v1/payments/{paymentId}/cancel", paymentId)
                 .contentType(MediaType.APPLICATION_JSON).body(Map.of("reason", reason)).retrieve().body(Payment.class));
     }
 
     public Refund refund(UUID paymentId, RefundRequest request) {
-        return RemoteCalls.call(SERVICE, "refund", retrier, () -> http.post()
+        return RemoteCalls.call(SERVICE, "refund", resilience, () -> http.post()
                 .uri("/internal/v1/payments/{paymentId}/refunds", paymentId)
                 .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(Refund.class));
     }

@@ -49,6 +49,10 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [x] Gateway selection `GV_PAYMENT_PROVIDER` (simulated default)
 - [~] Razorpay test mode: implemented, tested against a fake Razorpay API and mocked Checkout; **not run against Razorpay's test API (needs keys)**
 
+## High availability (Phase 4, 22 Oct 2026)
+- [x] 2 Eureka peers, 2 gateways behind nginx (`gateway-lb`), 2 booking replicas, Resilience4j in gateway and booking
+- [x] `scripts/failover-demo.sh`: run A 99/100 requests + 4/4 bookings, run B 100/100 + 4/4 ([evidence](testing/evidence/failover-demo.txt))
+
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
   exclusion-constraint deadlock (per-room row lock) · LocalDate JSON as arrays in load-balanced clients ·
@@ -68,6 +72,6 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Not done / limitations
 - Razorpay not run against the real test API (needs keys) · cloud deployment (none performed) · CI workflow never run on GitHub ·
-  in-memory gateway rate limiting; gateway and Eureka not run as multiple instances ·
+  in-memory gateway rate limiting (per instance) · single instances of auth/room/payment/notification, RabbitMQ, DBs ·
   e-mails captured by Mailpit only (no real provider) · responsive checks by emulation only ·
   not yet pushed to a remote

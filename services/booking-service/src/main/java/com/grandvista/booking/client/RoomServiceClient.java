@@ -1,6 +1,5 @@
 package com.grandvista.booking.client;
 
-import com.grandvista.platform.client.Retrier;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -38,25 +37,25 @@ public class RoomServiceClient {
     }
 
     private final RestClient http;
-    private final Retrier retrier;
+    private final Resilience resilience;
 
-    public RoomServiceClient(RestClient http, Retrier retrier) {
+    public RoomServiceClient(RestClient http, Resilience resilience) {
         this.http = http;
-        this.retrier = retrier;
+        this.resilience = resilience;
     }
 
     public Hold hold(HoldRequest request) {
-        return RemoteCalls.call(SERVICE, "hold", retrier, () -> http.post().uri("/internal/v1/holds")
+        return RemoteCalls.call(SERVICE, "hold", resilience, () -> http.post().uri("/internal/v1/holds")
                 .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(Hold.class));
     }
 
     public Hold confirm(UUID bookingId) {
-        return RemoteCalls.call(SERVICE, "confirm", retrier, () -> http.post()
+        return RemoteCalls.call(SERVICE, "confirm", resilience, () -> http.post()
                 .uri("/internal/v1/holds/{bookingId}/confirm", bookingId).retrieve().body(Hold.class));
     }
 
     public void release(UUID bookingId, String reason) {
-        RemoteCalls.call(SERVICE, "release", retrier, () -> http.post()
+        RemoteCalls.call(SERVICE, "release", resilience, () -> http.post()
                 .uri("/internal/v1/holds/{bookingId}/release", bookingId)
                 .contentType(MediaType.APPLICATION_JSON).body(Map.of("reason", reason))
                 .retrieve().toBodilessEntity());

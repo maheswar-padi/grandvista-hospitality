@@ -366,38 +366,48 @@ sequenceDiagram
 
 Details and trade-offs: [SECURITY.md](../security/SECURITY.md).
 
-## 10. Deployment architecture
+## 10. Deployment architecture (high availability)
 
 ```mermaid
 flowchart TB
-  subgraph host[Docker host]
-    direction TB
-    subgraph net[network: grandvista]
-      fe[frontend :8080]
-      gw[api-gateway :8080]
-      ds[discovery-server :8761]
-      au[auth-service :8081]
-      ro[room-service :8082]
-      bo[booking-service :8083]
-      pa[payment-service :8084]
-      pg[(postgres :5432)]
-    end
-    v1[(volume: postgres-data)]
-    v2[(volume: room-media)]
-    sec[/infrastructure/secrets: JWT keys (read-only)/]
+  user([Browser]) -->|:3000| fe[frontend · nginx<br/>SPA + /api upstream]
+  client([API client · Swagger]) -->|:8080| lb[gateway-lb · nginx<br/>round robin + failover]
+  fe --> gw1[api-gateway-1]
+  fe --> gw2[api-gateway-2]
+  lb --> gw1
+  lb --> gw2
+  gw1 & gw2 -->|lb:// + retry on connect failure<br/>circuit breaker per service| svc
+  subgraph svc[Business services]
+    auth[auth-service]
+    room[room-service]
+    b1[booking-service #1]
+    b2[booking-service #2]
+    pay[payment-service]
+    notif[notification-service]
   end
-  user([Browser]) -->|:3000| fe
-  user -->|:8080 API / Swagger| gw
-  admin([Operator]) -->|127.0.0.1:8761| ds
-  pg --- v1
-  ro --- v2
-  au --- sec
+  subgraph disc[Discovery]
+    e1[(discovery-server-1)] <-->|peer replication| e2[(discovery-server-2)]
+  end
+  svc -. register / fetch (both URLs) .-> disc
+  gw1 & gw2 -. fetch .-> disc
+  svc --- mq{{RabbitMQ}}
+  notif --- mail[Mailpit]
+  svc --- dbs[(5 PostgreSQL servers)]
 ```
 
-Start order is enforced by health checks (`depends_on: condition: service_healthy`): postgres → discovery →
-auth → room & payment → booking → gateway → frontend. All Java containers run as a non-root user with memory
-limits, `/actuator/health/readiness` health checks and rotated logs. Cloud options:
-[DEPLOYMENT.md](../deployment/DEPLOYMENT.md#cloud-deployment).
+| Concern | Mechanism |
+|---|---|
+| Gateway failure | Two gateway instances. `gateway-lb` (public port 8080) and the frontend's nginx both balance across them with passive health checks (`max_fails=1 fail_timeout=10s`, `proxy_next_upstream error timeout`); names are re-resolved every 5 s, so a restarted gateway with a new IP rejoins. Every response carries `X-Gateway-Instance`. |
+| Eureka failure | Two Eureka servers registered with each other (`EUREKA_PEER_URL`); every client lists both URLs. Registrations replicate between peers; clients keep a local registry copy, so routing continues while one server is down. |
+| Service instance failure | Two booking-service replicas. Gateways cache instance lists for 5 s; a crashed instance (no deregistration) is evicted after its 15 s lease (renewal every 5 s, eviction run every 5 s). Until then the gateway's `Retry` filter re-sends a request to another instance **only** when the connection could not be made (`ConnectException`, `NoRouteToHostException`, connect timeout of 1 s) — safe for every method because the request never reached a service. Queue consumers on the dead replica lose their unacknowledged messages to the broker, which re-delivers them to the other replica. |
+| Repeated failures | Resilience4j circuit breaker per downstream service in the gateway (opens at ≥ 50 % failures over the last 20 calls, minimum 10; open 10 s) with a fallback answer `503 SERVICE_UNAVAILABLE` + `Retry-After: 10`; and in the booking-service for room/payment calls (≥ 50 % of last 10, minimum 5) with retries (3 attempts, exponential backoff with jitter, transient failures only). |
+| Timeouts | HTTP client timeouts everywhere (gateway: connect 1 s, response 15 s; booking → room/payment: connect 2 s, read 5–8 s); the gateway's circuit-breaker time limiter (16 s) is deliberately above the response timeout. |
+| Health | `/actuator/health/liveness` and `/readiness` on every Java service (Docker health checks use readiness), `/healthz` (frontend) and `/lb-health` (load balancer). Start order enforced with `depends_on: condition: service_healthy`. |
+
+Single instances remain for auth-, room-, payment- and notification-service, RabbitMQ, Mailpit and each PostgreSQL
+server (they could be replicated the same way; memory on the demonstration laptop is the limit). The in-memory
+rate limit is per gateway instance, so with two gateways a client can make up to twice the configured rate.
+Verification: `scripts/failover-demo.sh` (results in [TESTING.md](../testing/TESTING.md)).
 
 ## 11. Technology decisions
 

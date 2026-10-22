@@ -192,6 +192,22 @@ scroll inside their cards, cancel dialog at 375 × 420 (fits, scrolls, Close vis
 fix it could not scroll), full customer journey register → checkout → async simulated payment → live
 confirmation → dashboard, session restore from the HttpOnly cookie (cookie not visible to JavaScript).
 
+## Failover demonstration (22 Oct 2026, `scripts/failover-demo.sh`)
+
+Kills one container at a time with SIGKILL while sending 30 public requests through the load balancer and making
+one complete booking (create → pay → CONFIRMED); then restarts it. Requests are counted once (no client retries).
+
+| Step | Run A | Run B |
+|---|---|---|
+| baseline | 30/30 · booking OK | 30/30 · booking OK |
+| api-gateway-1 killed | 29/30 · booking OK | 30/30 · booking OK |
+| discovery-server-1 killed (+ notification-service re-registers via Eureka 2) | 30/30 · booking OK | 30/30 · booking OK |
+| one booking-service replica killed (10 "my bookings" requests) | 10/10 · booking OK | 10/10 · booking OK |
+
+Run A's failure: a request in flight to the killed gateway got 504 from nginx after the connect timeout instead of
+being passed to the other gateway. A run before the Phase 4 fixes failed the booking with a replica killed (connect
+error `NoRouteToHostException` was not retried). Raw output: [evidence/failover-demo.txt](evidence/failover-demo.txt).
+
 ## 7. Not tested / limitations of the evidence
 
 * No real payment provider (only the simulated one) and no cloud deployment exist to test.

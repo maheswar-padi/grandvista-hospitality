@@ -19,8 +19,27 @@ x-rabbit-env: &rabbit-env
   RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
 
+x-discovery-env: &discovery-env
+  EUREKA_USERNAME: ${EUREKA_USERNAME:?missing}
+  EUREKA_PASSWORD: ${EUREKA_PASSWORD:?missing}
+  EUREKA_PEER_ENABLED: "true"
+  EUREKA_SELF_PRESERVATION: "false"
+
+# Every client knows both Eureka servers and fails over between them.
+x-eureka-url: &eureka-url http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server-1:8761/eureka,http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server-2:8761/eureka
+
+x-gateway-env: &gateway-env
+  EUREKA_URL: *eureka-url
+  GV_JWKS_URI: http://auth-service:8081/oauth2/jwks
+  GV_CORS_ALLOWED_ORIGINS: ${GV_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+  GV_TRUST_FORWARDED_FOR: "true"
+  GV_API_RATE_LIMIT: ${GV_API_RATE_LIMIT:-300}
+  GV_AUTH_RATE_LIMIT: ${GV_AUTH_RATE_LIMIT:-10}
+  API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+
 x-eureka-env: &eureka-env
-  EUREKA_URL: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka
+  EUREKA_URL: *eureka-url
   GV_JWKS_URI: http://auth-service:8081/oauth2/jwks
   GV_HOTEL_ZONE: ${GV_HOTEL_ZONE:-Asia/Kolkata}
   API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
@@ -145,17 +164,30 @@ services:
     ports: ["127.0.0.1:${MAILPIT_UI_HOST_PORT:-8025}:8025"]
     deploy: { resources: { limits: { memory: 64m } } }
 
-  discovery-server:
+  # ---- Service discovery: two Eureka servers that replicate their registries to each other ----
+  discovery-server-1:
     <<: *java-service
     build: { context: ., dockerfile: services/discovery-server/Dockerfile }
     image: grandvista/discovery-server:1.0.0
+    hostname: discovery-server-1
     environment:
-      EUREKA_USERNAME: ${EUREKA_USERNAME:?missing}
-      EUREKA_PASSWORD: ${EUREKA_PASSWORD:?missing}
-      EUREKA_HOSTNAME: discovery-server
-      EUREKA_SELF_PRESERVATION: "false"
+      <<: *discovery-env
+      EUREKA_HOSTNAME: discovery-server-1
+      EUREKA_PEER_URL: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server-2:8761/eureka
     # Dashboard is protected by HTTP Basic; published on loopback only.
     ports: ["127.0.0.1:8761:8761"]
+    deploy: { resources: { limits: { memory: 384m } } }
+
+  discovery-server-2:
+    <<: *java-service
+    build: { context: ., dockerfile: services/discovery-server/Dockerfile }
+    image: grandvista/discovery-server:1.0.0
+    hostname: discovery-server-2
+    environment:
+      <<: *discovery-env
+      EUREKA_HOSTNAME: discovery-server-2
+      EUREKA_PEER_URL: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server-1:8761/eureka
+    ports: ["127.0.0.1:8762:8761"]
     deploy: { resources: { limits: { memory: 384m } } }
 
   auth-service:
@@ -164,7 +196,8 @@ services:
     image: grandvista/auth-service:1.0.0
     depends_on:
       auth-db: { condition: service_healthy }
-      discovery-server: { condition: service_healthy }
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
     environment:
       <<: *eureka-env
       DB_URL: jdbc:postgresql://auth-db:5432/grandvista_auth
@@ -193,7 +226,8 @@ services:
     image: grandvista/room-service:1.0.0
     depends_on:
       room-db: { condition: service_healthy }
-      discovery-server: { condition: service_healthy }
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
       <<: *eureka-env
@@ -213,7 +247,8 @@ services:
     depends_on:
       payment-db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
-      discovery-server: { condition: service_healthy }
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
       <<: [*eureka-env, *rabbit-env]
@@ -233,10 +268,18 @@ services:
     <<: *java-service
     build: { context: ., dockerfile: services/booking-service/Dockerfile }
     image: grandvista/booking-service:1.0.0
+    # Two replicas: requests are balanced by the gateways (Eureka + client-side load balancing), RabbitMQ
+    # consumers compete for messages, and scheduled jobs are safe to run on both (row locks / SKIP LOCKED).
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 448m
     depends_on:
       booking-db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
-      discovery-server: { condition: service_healthy }
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
       auth-service: { condition: service_healthy }
       room-service: { condition: service_healthy }
       payment-service: { condition: service_healthy }
@@ -255,7 +298,8 @@ services:
       notification-db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       mailpit: { condition: service_healthy }
-      discovery-server: { condition: service_healthy }
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
       <<: [*eureka-env, *rabbit-env]
@@ -267,23 +311,49 @@ services:
       GV_MAIL_FROM: ${GV_MAIL_FROM:-GrandVista Hospitality <reservations@grandvista.local>}
       GV_PUBLIC_WEB_URL: ${GV_PUBLIC_WEB_URL:-http://localhost:3000}
 
-  api-gateway:
+  # ---- Edge: two API gateway instances behind an nginx load balancer (the only public API port) ----
+  api-gateway-1:
     <<: *java-service
     build: { context: ., dockerfile: services/api-gateway/Dockerfile }
     image: grandvista/api-gateway:1.0.0
+    hostname: api-gateway-1
     depends_on:
-      discovery-server: { condition: service_healthy }
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
-      EUREKA_URL: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@discovery-server:8761/eureka
-      GV_JWKS_URI: http://auth-service:8081/oauth2/jwks
-      GV_CORS_ALLOWED_ORIGINS: ${GV_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      GV_TRUST_FORWARDED_FOR: "true"
-      GV_API_RATE_LIMIT: ${GV_API_RATE_LIMIT:-300}
-      GV_AUTH_RATE_LIMIT: ${GV_AUTH_RATE_LIMIT:-10}
-      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+      <<: *gateway-env
+      GV_INSTANCE_NAME: api-gateway-1
+
+  api-gateway-2:
+    <<: *java-service
+    build: { context: ., dockerfile: services/api-gateway/Dockerfile }
+    image: grandvista/api-gateway:1.0.0
+    hostname: api-gateway-2
+    depends_on:
+      discovery-server-1: { condition: service_healthy }
+      discovery-server-2: { condition: service_healthy }
+      auth-service: { condition: service_healthy }
+    environment:
+      <<: *gateway-env
+      GV_INSTANCE_NAME: api-gateway-2
+
+  gateway-lb:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    restart: unless-stopped
+    networks: [grandvista]
+    depends_on:
+      api-gateway-1: { condition: service_healthy }
+      api-gateway-2: { condition: service_healthy }
+    volumes:
+      - ./infrastructure/docker/gateway-lb/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports: ["${GATEWAY_HOST_PORT:-8080}:8080"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/lb-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy: { resources: { limits: { memory: 32m } } }
 
   frontend:
     build: { context: ./frontend }
@@ -294,7 +364,8 @@ services:
     restart: unless-stopped
     networks: [grandvista]
     depends_on:
-      api-gateway: { condition: service_healthy }
+      api-gateway-1: { condition: service_healthy }
+      api-gateway-2: { condition: service_healthy }
     ports: ["${FRONTEND_HOST_PORT:-3000}:8080"]
     deploy: { resources: { limits: { memory: 64m } } }
 

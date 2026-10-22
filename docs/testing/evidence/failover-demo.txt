@@ -1,0 +1,94 @@
+# scripts/failover-demo.sh — recorded output, 22 Oct 2026 (local time IST; container logs are UTC)
+# Earlier run before the fixes listed in CHANGELOG Phase 4 (not reproduced here): the booking with one booking
+# replica killed FAILED with 503 (connect error NoRouteToHostException was not retried), 'my bookings' 10/10 but ~2.1 s each.
+
+## Run A (after fixes)
+
+== 0. Starting point ==
+api-gateway-1	Up About a minute (healthy)
+api-gateway-2	Up About a minute (healthy)
+booking-service	Up About a minute (healthy)
+booking-service	Up About a minute (healthy)
+discovery-server-1	Up About a minute (healthy)
+discovery-server-2	Up About a minute (healthy)
+gateway-lb	Up 20 minutes (healthy)
+20:06:05 Eureka-1 BOOKING-SERVICE: UP,UP · Eureka-2: UP,UP
+20:06:07 baseline: 30/30 requests succeeded, 0 failed; answered by: api-gateway-1×15 api-gateway-2×15 
+20:06:10 baseline booking GV-APDZX9: created, paid, CONFIRMED
+
+== 1. Kill API gateway 1 (load balancer must route around it) ==
+20:06:10 killed api-gateway-1 (ee69c9315d6b3a0bd0b2ba60bce958317610f61fb26c0a9c34545b68de32baeb)
+20:06:14 gateway-1 down: 29/30 requests succeeded, 1 failed; answered by: api-gateway-2×29 
+20:06:16 gateway-1 down booking GV-EQMVJ9: created, paid, CONFIRMED
+20:06:22 api-gateway-1 restarted and healthy
+
+== 2. Kill Eureka server 1 (clients and gateways use the peer) ==
+20:06:22 killed discovery-server-1 (f9ecedbc3c8dc0e41f2bcb4b5a6916363a159c6a5240157ebec3ea944355be4d)
+20:06:25 eureka-1 down: 30/30 requests succeeded, 0 failed; answered by: api-gateway-1×15 api-gateway-2×15 
+20:06:27 eureka-1 down booking GV-XGDCBW: created, paid, CONFIRMED
+20:06:27 restarting notification-service while eureka-1 is down: it must register with eureka-2
+20:06:41 Eureka-2 NOTIFICATION-SERVICE: UP (Eureka-1: unreachable)
+20:06:48 discovery-server-1 restarted and healthy
+20:06:48 after restart, Eureka-1 NOTIFICATION-SERVICE: UP (replicated from its peer)
+
+== 3. Kill one booking-service replica (gateway retries the other; RabbitMQ re-delivers its messages) ==
+20:06:49 killed booking-service replica (39625fb65fd4c559e8aceb70f1fa4d8c9df8ab3455a6fa1695bf7ec217e5e1b5)
+20:07:00 booking replica down: 10/10 'my bookings' requests succeeded, 0 failed
+20:07:05 booking replica down booking GV-DMVJJF: created, paid, CONFIRMED
+20:07:17 booking-service replica restarted and healthy
+20:07:45 Eureka BOOKING-SERVICE instances: UP,UP
+
+== Summary (requests counted once each; no client-side retries) ==
+step                                   requests   full booking
+baseline (everything up)               30/30      OK
+api-gateway-1 killed                   29/30      OK
+discovery-server-1 killed              30/30      OK
+one booking-service replica killed     10/10      OK
+FAILOVER DEMO: 1 failure(s) — see the lines above
+
+# Run A note: the one failed request was a GET in flight to api-gateway-1 when it was killed; nginx answered 504 after
+# the connect timeout instead of trying api-gateway-2 (gateway-lb log 14:36:13 UTC: 'upstream timed out while connecting').
+
+## Run B (same code, immediately after)
+
+== 0. Starting point ==
+api-gateway-1	Up 2 minutes (healthy)
+api-gateway-2	Up 4 minutes (healthy)
+booking-service	Up 3 minutes (healthy)
+booking-service	Up About a minute (healthy)
+discovery-server-1	Up About a minute (healthy)
+discovery-server-2	Up 4 minutes (healthy)
+gateway-lb	Up 22 minutes (healthy)
+20:08:25 Eureka-1 BOOKING-SERVICE: UP,UP · Eureka-2: UP,UP
+20:08:27 baseline: 30/30 requests succeeded, 0 failed; answered by: api-gateway-1×15 api-gateway-2×15 
+20:08:32 baseline booking GV-NG9849: created, paid, CONFIRMED
+
+== 1. Kill API gateway 1 (load balancer must route around it) ==
+20:08:32 killed api-gateway-1 (ee69c9315d6b3a0bd0b2ba60bce958317610f61fb26c0a9c34545b68de32baeb)
+20:08:35 gateway-1 down: 30/30 requests succeeded, 0 failed; answered by: api-gateway-2×30 
+20:08:38 gateway-1 down booking GV-23JCBV: created, paid, CONFIRMED
+20:08:44 api-gateway-1 restarted and healthy
+
+== 2. Kill Eureka server 1 (clients and gateways use the peer) ==
+20:08:45 killed discovery-server-1 (f9ecedbc3c8dc0e41f2bcb4b5a6916363a159c6a5240157ebec3ea944355be4d)
+20:08:46 eureka-1 down: 30/30 requests succeeded, 0 failed; answered by: api-gateway-1×15 api-gateway-2×15 
+20:08:51 eureka-1 down booking GV-97UT8M: created, paid, CONFIRMED
+20:08:51 restarting notification-service while eureka-1 is down: it must register with eureka-2
+20:09:01 Eureka-2 NOTIFICATION-SERVICE: UP (Eureka-1: unreachable)
+20:09:11 discovery-server-1 restarted and healthy
+20:09:11 after restart, Eureka-1 NOTIFICATION-SERVICE: UP (replicated from its peer)
+
+== 3. Kill one booking-service replica (gateway retries the other; RabbitMQ re-delivers its messages) ==
+20:09:12 killed booking-service replica (39625fb65fd4c559e8aceb70f1fa4d8c9df8ab3455a6fa1695bf7ec217e5e1b5)
+20:09:23 booking replica down: 10/10 'my bookings' requests succeeded, 0 failed
+20:09:26 booking replica down booking GV-6EWTAS: created, paid, CONFIRMED
+20:09:37 booking-service replica restarted and healthy
+20:10:05 Eureka BOOKING-SERVICE instances: UP,UP
+
+== Summary (requests counted once each; no client-side retries) ==
+step                                   requests   full booking
+baseline (everything up)               30/30      OK
+api-gateway-1 killed                   30/30      OK
+discovery-server-1 killed              30/30      OK
+one booking-service replica killed     10/10      OK
+FAILOVER DEMO PASSED: no failed request or booking

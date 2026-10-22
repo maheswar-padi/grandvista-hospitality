@@ -13,14 +13,22 @@ spring:
 eureka:
   instance:
     hostname: ${EUREKA_HOSTNAME:localhost}
+    # Peers must address each other by the hostname used in their service URLs.
+    prefer-ip-address: false
   client:
-    register-with-eureka: false
-    fetch-registry: false
+    # Standalone by default. With EUREKA_PEER_ENABLED=true and EUREKA_PEER_URL pointing at the other server(s),
+    # the servers register with each other and replicate every registration (high availability).
+    register-with-eureka: ${EUREKA_PEER_ENABLED:false}
+    fetch-registry: ${EUREKA_PEER_ENABLED:false}
+    service-url:
+      defaultZone: ${EUREKA_PEER_URL:http://localhost:${server.port}/eureka}
   server:
     # Self-preservation protects against network partitions in production but hides stopped
     # instances during local demos. Enabled by default; disable with EUREKA_SELF_PRESERVATION=false.
     enable-self-preservation: ${EUREKA_SELF_PRESERVATION:true}
-    eviction-interval-timer-in-ms: 10000
+    eviction-interval-timer-in-ms: 5000
+    # Serve registry changes (registrations, evictions) to clients without the 30 s read-only cache delay.
+    use-read-only-response-cache: false
 
 management:
   endpoints:

@@ -387,6 +387,15 @@ generated RSA key pair mounted read-only. A cloud deployment path (managed conta
 manager, HTTPS load balancer) is documented in `docs/deployment/DEPLOYMENT.md`; **no cloud deployment was
 performed**.
 
+**High availability.** Two Eureka servers replicate their registries to each other; two API gateway instances run
+behind an nginx load balancer (and the web server's own upstream); the booking service runs as two replicas.
+Resilience4j circuit breakers protect the gateway's routes (with a fallback answer `503` + `Retry-After`) and the
+booking service's calls to the room and payment services (with retries limited to transient failures). The
+failover script `scripts/failover-demo.sh` kills (SIGKILL) one gateway, one Eureka server and one booking replica in
+turn while sending requests and making complete bookings. Two recorded runs: 99 of 100 and 100 of 100 requests
+succeeded, and all 8 bookings completed (`docs/testing/evidence/failover-demo.txt`). The single failure was a request
+already in flight to the gateway at the moment it was killed.
+
 ## 23. Security considerations
 
 Threats addressed include brute force (lockout, rate limits), token theft (in-memory access tokens, HttpOnly
@@ -454,7 +463,8 @@ must not contain fabricated images):
 1. Integrate a real payment provider (implementing the existing `PaymentProvider` interface and its webhook
    signature scheme).
 2. Connect a real e-mail provider (SMTP relay or API) in place of Mailpit; add SMS notifications.
-3. Redis-backed rate limiting and caching of catalogue reads; multiple gateway and Eureka instances.
+3. Redis-backed rate limiting shared by the gateway instances; caching of catalogue reads; replicas of the remaining
+   single-instance services and of RabbitMQ and PostgreSQL.
 4. Cloud deployment with managed PostgreSQL, a secret manager, HTTPS and centralised logging and tracing
    (OpenTelemetry).
 5. E-mail/SMS notifications for confirmations, reminders and refunds.

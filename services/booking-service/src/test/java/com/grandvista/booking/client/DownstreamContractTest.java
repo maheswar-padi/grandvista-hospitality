@@ -11,7 +11,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.grandvista.booking.web.dto.BookingDtos.PaymentEventMessage;
-import com.grandvista.platform.client.Retrier;
 import com.grandvista.platform.client.ServiceCallException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -19,6 +18,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -32,7 +32,18 @@ import org.springframework.web.client.RestClient;
 class DownstreamContractTest {
 
     private static final Path CONTRACTS = Path.of("../../contracts");
-    private final Retrier noWaitRetrier = new Retrier(new Retrier.Policy(3, Duration.ZERO, 1, Duration.ZERO), d -> { });
+    /** Same policies as application.yml, without waiting between attempts. */
+    private static Resilience resilience() {
+        var circuitBreakers = io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry.of(
+                io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.custom()
+                        .slidingWindowSize(10).minimumNumberOfCalls(5).failureRateThreshold(50)
+                        .waitDurationInOpenState(Duration.ofSeconds(10)).recordException(new TransientFailure()).build());
+        var retries = io.github.resilience4j.retry.RetryRegistry.of(io.github.resilience4j.retry.RetryConfig.custom()
+                .maxAttempts(3).waitDuration(Duration.ofMillis(1)).retryOnException(new TransientFailure()).build());
+        return new Resilience(circuitBreakers, retries);
+    }
+
+    private final Resilience noWaitRetrier = resilience();
 
     /** Mirrors the production builder: Spring Boot's Jackson settings (ISO-8601 dates, java.time support). */
     private static RestClient.Builder builder(String baseUrl) {
@@ -145,5 +156,57 @@ class DownstreamContractTest {
         } finally {
             slow.stop(0);
         }
+    }
+
+    @Test
+    void circuitOpensAfterRepeatedFailuresAndThenFailsFastWithoutCalling() throws Exception {
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer down = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        down.createContext("/", exchange -> {
+            calls.incrementAndGet();
+            byte[] body = "{\"status\":503,\"code\":\"SERVICE_UNAVAILABLE\"}".getBytes();
+            exchange.getResponseHeaders().add("Content-Type", "application/problem+json");
+            exchange.sendResponseHeaders(503, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        down.start();
+        try {
+            Resilience resilience = resilience();
+            RestClient http = RestClient.builder().baseUrl("http://127.0.0.1:" + down.getAddress().getPort()).build();
+            RoomServiceClient client = new RoomServiceClient(http, resilience);
+            // two logical calls = 6 recorded failures: above the 50% threshold after the minimum of 5 calls
+            for (int i = 0; i < 2; i++) {
+                assertThatThrownBy(() -> client.confirm(UUID.randomUUID())).isInstanceOf(ServiceCallException.class);
+            }
+            assertThat(resilience.state(RoomServiceClient.SERVICE))
+                    .isEqualTo(io.github.resilience4j.circuitbreaker.CircuitBreaker.State.OPEN);
+            int before = calls.get();
+            assertThatThrownBy(() -> client.confirm(UUID.randomUUID())).isInstanceOf(ServiceCallException.class)
+                    .hasMessageContaining("circuit breaker is open");
+            assertThat(calls.get()).isEqualTo(before); // failed fast: the service was not called
+        } finally {
+            down.stop(0);
+        }
+    }
+
+    @Test
+    void businessErrorsAreNeitherRetriedNorCountedAsFailures() {
+        RestClient.Builder builder = builder("http://room-service");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        Resilience resilience = resilience();
+        RoomServiceClient client = new RoomServiceClient(builder.build(), resilience);
+        List<UUID> ids = java.util.stream.Stream.generate(UUID::randomUUID).limit(6).toList();
+        for (UUID id : ids) { // exactly one request each: a 409 is never retried
+            server.expect(ExpectedCount.once(), requestTo("http://room-service/internal/v1/holds/" + id + "/confirm"))
+                    .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                            .body("{\"status\":409,\"code\":\"INVENTORY_NO_LONGER_AVAILABLE\"}"));
+        }
+        for (UUID id : ids) {
+            assertThatThrownBy(() -> client.confirm(id)).isInstanceOf(DownstreamException.class);
+        }
+        server.verify();
+        assertThat(resilience.state(RoomServiceClient.SERVICE))
+                .isEqualTo(io.github.resilience4j.circuitbreaker.CircuitBreaker.State.CLOSED);
     }
 }
