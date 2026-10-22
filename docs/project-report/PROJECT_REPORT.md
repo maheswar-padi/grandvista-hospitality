@@ -8,6 +8,7 @@
 | Institution | K L University (Koneru Lakshmaiah Education Foundation) |
 | Student name(s) | `[to be completed by the student]` |
 | Register number(s) | `[to be completed]` |
+| Department | `[to be completed]` |
 | Section / batch | `[to be completed]` |
 | Faculty guide | `[to be completed]` |
 | Academic year | `[to be completed]` |
