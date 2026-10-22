@@ -1,138 +1,118 @@
-# Demonstration script
+# Demonstration script (7–10 minutes)
 
-A 20–25 minute live demonstration covering the sixteen points required by the project brief. Every step has
-been run on the local stack; the automated equivalent of steps 3–16 is `./scripts/e2e-smoke.sh` (52 checks).
+Booking → payment → e-mail → failover → CI. Every step below has been run on the local stack; timings are
+approximate. A longer, feature-by-feature walkthrough follows in the appendix.
 
-## Before the demonstration (once)
+## Before the demonstration (once, ~5 minutes)
 
 ```bash
 ./scripts/init-env.sh
 ```
 ```bash
-docker compose up -d --build
+docker compose up -d --build --wait
 ```
 ```bash
 ./scripts/e2e-smoke.sh
 ```
-The smoke test proves the stack works and leaves some bookings so the dashboard has data. Keep three browser
-tabs ready: the web app (http://localhost:3000), Swagger (http://localhost:8080/swagger-ui.html) and the Eureka
-dashboard (http://localhost:8761 — credentials `EUREKA_USERNAME`/`EUREKA_PASSWORD` in `.env`). Read the admin
-credentials from `.env` (`GV_BOOTSTRAP_ADMIN_EMAIL`, `GV_BOOTSTRAP_ADMIN_PASSWORD`) beforehand; do not display the
-file on screen.
 
-Shell helpers for the curl steps:
+The smoke test (56 checks) proves the stack works and leaves bookings and e-mails for the dashboards. Open these
+tabs in advance (credentials are in `.env`; never show the file on screen):
+
+| Tab | URL | Sign-in |
+|---|---|---|
+| Web app | http://localhost:3000 | demo customer `guest@grandvista.local` (`GV_DEMO_CUSTOMER_PASSWORD`) |
+| Mailpit | http://localhost:8025 | — |
+| Eureka 1 · Eureka 2 | http://localhost:8761 · http://localhost:8762 | `EUREKA_USERNAME` / `EUREKA_PASSWORD` |
+| RabbitMQ | http://localhost:15672 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` |
+| GitHub Actions | your repository's *Actions* tab | only after CI has been pushed |
+
+Optional: `docker compose --profile observability up -d` and Grafana at http://localhost:3001 (`admin` /
+`GRAFANA_ADMIN_PASSWORD`).
+
+## The walkthrough
+
+### 1. Architecture in one picture (1 min)
+Show `docs/diagrams/architecture.png`: two Eureka servers, two gateways behind nginx, five services with five
+databases, RabbitMQ, Mailpit. Then `docker compose ps` — 23 healthy containers.
+
+### 2. Booking (2 min)
+Web app → search dates two weeks ahead, 2 guests → open a room: the price breakdown shows weekend/season
+multipliers, fee and tax (dynamic pricing). Sign in as the demo customer → **Reserve this room** → the room is
+**held for 15 minutes** (countdown). Mention the Idempotency-Key: a double click cannot create two bookings.
+
+### 3. Payment (1 min)
+On the payment page: *Simulated payment — no real money*. Choose **Simulated Visa – approved** → **Pay**. The
+confirmation page switches to **Your stay is confirmed** only after the booking-service has received
+`payment.succeeded` from RabbitMQ and confirmed the room.
+*Razorpay test mode* (only if test keys were configured, see DEPLOYMENT.md): the same button opens Razorpay
+Checkout; the server verifies the signature and asks Razorpay before confirming.
+
+### 4. E-mail (1 min)
+Mailpit tab: **Your stay is confirmed — GV-…** and **Payment receipt — GV-…** arrived within seconds. Open one to
+show the HTML template. RabbitMQ tab → *Queues*: `booking.payment-events` and `notification.events` with 2
+consumers each, dead-letter queues empty. Mention: a redelivered event never sends a second e-mail.
+
+### 5. Failover (3 min)
 ```bash
-API=http://localhost:8080/api/v1
+./scripts/failover-demo.sh
 ```
+While it runs, narrate: it kills a gateway (traffic moves to the other one — watch the
+`X-Gateway-Instance` split), then a Eureka server (the peer keeps the registry; a restarted service registers
+with Eureka 2), then a booking replica (the gateway retries on the other replica; RabbitMQ re-delivers its
+messages). Each step makes a complete booking. End on the summary table. Show both Eureka dashboards afterwards.
 
----
+### 6. Quality and CI (1 min)
+Show the coverage summary (`./scripts/coverage-summary.sh` after `mvn -B clean verify`: 86.4 % lines) and the
+GitHub Actions run with the CI badge in the README — **only once the workflow has been pushed and is green**.
 
-### 1. Application start-up (2 min)
-```bash
-docker compose ps
-```
-Show eight healthy containers and explain the start order (postgres → discovery → auth → room/payment → booking →
-gateway → frontend) enforced by health checks. Show one service's log line with the correlation ID format:
-```bash
-docker compose logs --tail=5 booking-service
-```
+### Questions to expect
+* *Why can't two people book the same room?* PostgreSQL exclusion constraint + per-room row lock (k6: 10 parallel
+  attempts → 1 accepted, 9 refused).
+* *What if RabbitMQ is down?* Events wait in each service's outbox and are published when it returns; bookings
+  awaiting payment are also reconciled by the recovery job.
+* *What if the payment provider times out?* The payment stays PENDING and the reconciliation job asks the provider.
 
-### 2. Service registration (1 min)
-Eureka dashboard: AUTH-SERVICE, ROOM-SERVICE, BOOKING-SERVICE, PAYMENT-SERVICE, API-GATEWAY all **UP**.
-Optional — load balancing live:
-```bash
-docker compose up -d --scale room-service=2
-```
-After ~40 s two ROOM-SERVICE instances appear; requests are shared between them (see
-[testing evidence](testing/evidence/load-balancing.txt)). Scale back with `--scale room-service=1`.
+## Screenshot capture guide (for the report)
 
-### 3. Room search (1 min)
-Web app → enter dates two weeks ahead, 2 guests → **Search availability**. Point out filters, sort, total price for
-the stay, and that images are labelled illustrations.
+The numbers match the `[Screenshot n: …]` placeholders in `docs/project-report/PROJECT_REPORT.md` §25. Use a
+desktop browser window about 1440 px wide unless stated.
 
-### 4. Availability checking (1 min)
-Open a room → the panel says "Available …" and lists booked nights for the next 60 days. API view:
-```bash
-curl -s "$API/rooms?size=1" | jq -r '.content[0].id'
-```
-```bash
-curl -s "$API/rooms/<ROOM_ID>/availability?checkIn=2027-03-10&checkOut=2027-03-12"
-```
-
-### 5. Dynamic pricing (2 min)
-Room details → change dates to include a Friday/Saturday: the breakdown shows `weekend ×1.15`; dates between 20 Dec
-and 5 Jan show `Festive peak ×1.3`. Explain the formula, HALF_UP rounding, fee and tax, and the policy version.
-Admin → **Pricing** shows the active policy and history.
-
-### 6. Customer registration and login (1 min)
-**Create account** with a new e-mail (password ≥ 10 characters with a letter and a digit). Show the invalid-form
-messages first. Explain: access token in memory, refresh token in an HttpOnly cookie (DevTools → Application →
-Cookies: `gv_refresh` is HttpOnly, SameSite=Strict); reload the page — still signed in.
-
-### 7. Booking creation (2 min)
-**Reserve this room** → checkout (pre-filled) → **Reserve**. The booking reference appears and the room is held for
-15 minutes (countdown). Mention the Idempotency-Key: double-clicking or retrying cannot create a second booking.
-In another browser profile, open the same room for the same dates → the panel says **Not available for these dates** and the reserve button is disabled. (If two people reserve at the same moment, the loser sees "Sorry, this room was just booked" — see step 15 for the API view.)
-
-### 8. Payment simulation (1 min)
-Show the "Simulated payment — no real money is charged" banner and the test methods. Choose **Simulated bank
-redirect – approved by webhook** → **Pay**.
-
-### 9. Booking confirmation (1 min)
-The confirmation page first shows **Waiting for payment confirmation** and only switches to **Your stay is
-confirmed** once the booking-service has confirmed the room (signed webhook → payment SUCCEEDED → outbox event →
-room confirmed). Point out the reference, dates and price snapshot.
-
-### 10. Inventory update (1 min)
-Search the same dates again → the room is no longer listed. Admin → **Rooms & inventory** / overview: occupancy
-and the allocation exist.
-
-### 11. Customer booking history (1 min)
-**My bookings** → Upcoming / Past / All tabs; open the booking → timeline (Processing → Awaiting payment →
-Confirmed) and payment status "Paid · simulated".
-
-### 12. Booking cancellation (1 min)
-**Cancel booking** → the dialog shows the policy (100% ≥ 7 days, 50% 2–6 days, none within 48 h) and the refund
-amount → confirm → status **Cancelled**, refund shown, payment **Refunded**.
-
-### 13. Inventory release (30 s)
-Search the dates again → the room is available.
-
-### 14. Administrator room management (3 min)
-Sign out → sign in as the administrator → **Administration**:
-* Overview: occupancy chart (next 30 nights), bookings trend, payments — all from live data; "Show data as a table".
-* Rooms & inventory → **Status** → set a room to *Maintenance* (reason "Leak") → it disappears from customer search;
-  set it back to *Active*.
-* **Edit** a room → change the base rate → save; upload a JPEG/PNG photo; try renaming a `.svg` to `.png` → refused.
-* Users & roles → grant STAFF to the demo customer.
-
-### 15. Error handling for an unavailable room (1 min)
-```bash
-TOKEN=$(curl -s -X POST $API/auth/register -H 'Content-Type: application/json' -d "{\"email\":\"demo-$RANDOM@example.test\",\"password\":\"correct-horse-42\",\"fullName\":\"Demo\"}" | jq -r .accessToken)
-```
-Book the room that is already held/confirmed for the same dates:
-```bash
-curl -s -X POST $API/bookings -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H "Idempotency-Key: demo-$RANDOM$RANDOM" -d '{"roomId":"<ROOM_ID>","checkIn":"<SAME_CHECKIN>","checkOut":"<SAME_CHECKOUT>","guests":1,"primaryGuest":{"fullName":"Demo","email":"demo@example.test"}}' | jq
-```
-→ `409` with `"code": "ROOM_UNAVAILABLE"` and "You have not been charged". Also show invalid dates (`400
-INVALID_DATE_RANGE`) and a customer calling an admin API (`403 ACCESS_DENIED`).
-
-### 16. Failed payment handling (1 min)
-Book again (new dates) → pay with **Simulated card – declined** → the confirmation page shows **Payment was not
-successful**, nothing charged; search shows the room available again.
-
-### Optional extras
-* Concurrency: `node scripts/load-test.mjs --vus 5 --duration 10 --contenders 8` (raise `GV_AUTH_RATE_LIMIT` first;
-  see [TESTING.md](testing/TESTING.md)) → "exactly one booking won".
-* Consistency audit: `node scripts/consistency-audit.mjs` (same note).
-* Trace one request: send `-H 'X-Correlation-Id: demo-trace-0001'` with a booking and run
-  `docker compose logs --no-log-prefix | grep demo-trace-0001`.
+| # | Where | What must be visible |
+|---|---|---|
+| 1 | http://localhost:3000 | home page with the search bar (dates, guests) |
+| 2 | search results after choosing dates | room cards with the **total stay price** and filters |
+| 3 | a room's details page | photo, amenities and the itemised quote (per night, fee, tax, total) |
+| 4 | payment page of a new booking | "Simulated payment" notice, hold countdown, list of test methods |
+| 5 | confirmation page after paying | "Your stay is confirmed", booking reference, dates, price |
+| 6 | http://localhost:8025 | the confirmation e-mail opened (HTML view) and the receipt in the list |
+| 7 | *My bookings* → open the booking | timeline Processing → Awaiting payment → Confirmed, payment "Paid · simulated" |
+| 8 | sign in as admin → *Administration* | overview with occupancy and booking charts |
+| 9 | http://localhost:8761 and :8762 | "Instances currently registered": API-GATEWAY (2), BOOKING-SERVICE (2), all UP |
+| 10 | http://localhost:15672 → *Queues and Streams* | both queues with 2 consumers; `.dlq` queues at 0 messages |
+| 11 | terminal after `./scripts/failover-demo.sh` | the "Summary" table and the final PASSED line |
+| 12 | http://localhost:3001 → Dashboards → GrandVista | request rate, latency, heap and e-mail panels with data |
+| 13 | http://localhost:8080/swagger-ui.html | Swagger UI with the service selector |
+| 14 | GitHub → *Actions* and the README | a green run (backend, frontend, e2e) and the CI badge — after CI has run |
 
 ## Troubleshooting during the demo
 
 | Problem | Fix |
 |---|---|
-| 503 just after start-up | services still registering — wait 30 s |
-| 429 `RATE_LIMITED` when registering many users | wait a minute (10 credential requests/min/IP) |
-| Hold countdown expired | start a new booking; the old one becomes *Expired* automatically |
+| 503 right after start-up | services still registering — wait 30 s (the smoke test waits automatically) |
+| 429 `RATE_LIMITED` when registering many users | wait a minute (10 credential requests/min/IP per gateway) |
+| Hold countdown expired | start a new booking; the old one becomes *Expired* and a "hold expired" e-mail is sent |
+| No e-mail in Mailpit | `docker compose logs notification-service`; RabbitMQ UI → `notification.events.dlq` |
+| Failover demo shows a failure | read the step's log lines; a request in flight to a killed gateway can fail once (documented in TESTING.md) |
 | Session lost after reload | use `http://localhost`, not an IP address (Secure cookie) |
+
+## Appendix — feature-by-feature checks (longer demo)
+
+| Feature | How to show it |
+|---|---|
+| Availability | room page lists booked nights; `GET /api/v1/rooms/{id}/availability?checkIn&checkOut` |
+| Cancellation | *Cancel booking* → policy (100 % ≥ 7 days, 50 % 2–6 days, none within 48 h) → refund → cancellation e-mail |
+| Failed payment | pay with **Simulated card – declined** → room released, "payment not completed" e-mail |
+| Admin | set a room to *Maintenance* (disappears from search), edit a price, upload a JPEG/PNG (SVG refused), grant STAFF |
+| Errors | book an already-held room → `409 ROOM_UNAVAILABLE`; invalid dates → `400 INVALID_DATE_RANGE`; customer on admin API → `403` |
+| Tracing | send `-H 'X-Correlation-Id: demo-trace-0001'` and run `docker compose logs --no-log-prefix \| grep demo-trace-0001` |
+| Load | `./scripts/load-test-k6.sh` (raises and restores the rate limits) |

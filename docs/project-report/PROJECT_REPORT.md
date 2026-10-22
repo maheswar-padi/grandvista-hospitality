@@ -37,17 +37,20 @@ implements **GrandVista Hospitality**, a reservation platform for a fictional ho
 deployable Spring Boot microservices behind a Spring Cloud API gateway with Eureka service discovery. A room
 service owns inventory, availability and a deterministic dynamic-pricing engine; a booking service orchestrates
 each reservation as a saga across the room and payment services; a payment service implements a payment state
-machine over a provider abstraction with a simulated provider, signed webhooks, refunds and a transactional
-outbox; an authentication service issues RS256 JSON Web Tokens with rotating refresh tokens. Double booking is
-prevented by a PostgreSQL exclusion constraint over date ranges, and every remote step is idempotent so retries
-and duplicate messages are harmless. A React and TypeScript web application provides the customer journey and an
-administration dashboard. The system is packaged with Docker Compose. Verification comprises 148 automated
-backend tests (unit, integration with real PostgreSQL via Testcontainers, contract and gateway tests), 24
-frontend tests, a 52-check end-to-end test on the running stack, a live consistency audit and a load test in
-which 10 simultaneous booking attempts for the same room produced exactly one reservation.
+machine over a gateway abstraction (a simulated provider and a Razorpay test-mode gateway), signed webhooks,
+refunds and a transactional outbox; a notification service turns domain events received over RabbitMQ into HTML
+e-mails; an authentication service issues RS256 JSON Web Tokens with rotating refresh tokens. Each service owns a
+separate PostgreSQL server. Double booking is prevented by a PostgreSQL exclusion constraint over date ranges, and
+every remote step is idempotent so retries and duplicate messages are harmless. Eureka, the gateway and the
+booking service run as two instances each, protected by Resilience4j circuit breakers and retries. A React and
+TypeScript web application provides the customer journey and an administration dashboard. The system is packaged
+with Docker Compose (23 containers). Verification comprises 196 automated backend tests (86.4 % line coverage)
+using real PostgreSQL, RabbitMQ and Mailpit through Testcontainers, 29 frontend tests, a 56-check end-to-end test
+on the running stack, a failover test that kills a gateway, a Eureka server and a booking replica, and a k6 load
+test in which 10 simultaneous booking attempts for the same room produced exactly one reservation.
 
-**Keywords:** microservices, service-oriented architecture, saga pattern, transactional outbox, idempotency,
-dynamic pricing, Spring Cloud, Eureka, API gateway, JWT.
+**Keywords:** microservices, service-oriented architecture, saga pattern, transactional outbox, message broker,
+idempotency, high availability, circuit breaker, dynamic pricing, Spring Cloud, Eureka, API gateway, JWT.
 
 ## 2. Introduction
 
@@ -86,6 +89,8 @@ authentication and administration across independently deployable services, such
 7. Deliver a responsive web application for customers and administrators.
 8. Verify the system with layered automated tests and live end-to-end, consistency and load tests.
 9. Package the system with Docker Compose and document deployment, security and operation.
+10. Deliver domain events through a message broker and notify customers by e-mail without duplicates.
+11. Keep the system available when one instance of the gateway, the discovery server or the booking service fails.
 
 ## 5. Limitations of existing systems
 
@@ -102,9 +107,22 @@ Small hotels commonly rely on one of the following (general observations, not a 
 ## 6. Proposed system
 
 A microservices platform (Figure 1) in which each business capability is a separate Spring Boot service with its
-own PostgreSQL database; the browser talks only to the API gateway; services find each other through Eureka;
-the booking service coordinates the reservation saga; the payment service publishes payment outcomes through a
-transactional outbox; and invariants such as "no overlapping allocations" are enforced by database constraints.
+own PostgreSQL server; browsers and API clients reach two API gateway instances through nginx load balancers;
+services find each other through two replicated Eureka servers; the booking service coordinates the reservation
+saga; booking and payment events travel through RabbitMQ from transactional outboxes; a notification service
+e-mails customers; and invariants such as "no overlapping allocations" are enforced by database constraints.
+
+![Figure 1 — Service architecture](../diagrams/architecture.png)
+
+*Figure 1 — Service architecture (source: `docs/diagrams/architecture.mmd`, rendered with Mermaid CLI 11.4.2).*
+
+![Figure 2 — Booking, payment and e-mail event flow](../diagrams/event-flow.png)
+
+*Figure 2 — Booking, payment and e-mail event flow (`docs/diagrams/event-flow.mmd`).*
+
+The Mermaid source of the earlier, simpler view is kept below for reference.
+
+**Figure 1a — Core services (Mermaid source)**
 
 **Figure 1 — Service architecture**
 
@@ -135,38 +153,41 @@ flowchart LR
 | F3 | Check availability of a room for a stay `[check-in, check-out)` and view booked nights |
 | F4 | Obtain an itemised dynamic price quote (per night, fee, tax, total) |
 | F5 | Create a booking that holds the room for 15 minutes and prepares a payment |
-| F6 | Pay with a (simulated) provider; see an authoritative confirmation |
+| F6 | Pay with the simulated provider or Razorpay test mode; see an authoritative confirmation |
 | F7 | View upcoming/past bookings, booking details, status history and payment status |
 | F8 | Cancel a booking with a refund calculated by a documented policy |
 | F9 | Administer rooms, room types, amenities, photographs and operational status |
 | F10 | Publish versioned pricing policies (weekend, seasons, demand tiers, limits, fee, tax) |
 | F11 | View operational dashboards: occupancy, bookings, payments; search bookings and payments |
 | F12 | Manage users' roles and account status |
+| F13 | Receive e-mails: booking confirmation, payment receipt, cancellation, failed payment, expired hold |
 
 ## 8. Non-functional requirements
 
 | Category | Requirement and how it is met |
 |---|---|
 | Consistency | no double booking under concurrency (database exclusion constraint); idempotent operations |
-| Reliability | timeouts, bounded retries, outbox with backoff, recovery and reconciliation jobs |
+| Reliability & availability | timeouts, retries, circuit breakers (Resilience4j), outboxes with backoff, dead-letter queues, recovery and reconciliation jobs; 2 Eureka, 2 gateways, 2 booking replicas |
 | Security | RS256 JWT, BCrypt, lockout, rate limiting, CORS, ownership checks, input validation, secure uploads |
-| Performance | indexed queries, batched loading, virtual threads; measured ≈1 100 req/s for search+quote on one laptop |
+| Performance | indexed queries, batched loading, virtual threads; k6 on one laptop: search p95 135.9 ms, quote p95 60.8 ms at 20 virtual users |
 | Maintainability | small services, DTO contracts, migrations, consistent error format, shared conventions library |
-| Observability | health/readiness probes, Prometheus metrics, correlation IDs in all logs, audit tables |
+| Observability | health/readiness probes, Prometheus metrics and optional Grafana dashboard, correlation IDs in logs and messages, audit tables |
 | Usability & accessibility | responsive layout 375–1440 px, keyboard focus styles, labels, axe-core checks |
 | Portability | Docker images and Compose; environment-based configuration |
 
 ## 9. Software and hardware requirements
 
 **Development and verification environment (actually used):** Apple Silicon Mac, 8 GB RAM, macOS; Docker 29.9
-with a 4 GB VM; Java 21 (Eclipse Temurin); Maven 3.9.16; Node.js 22 and npm 10.
+with a 4 GB VM (the full stack used about 3 GB); Java 21 (Eclipse Temurin); Maven 3.9.16; Node.js 22 and npm 10.
 
 **Software stack:** Spring Boot 3.5.16, Spring Cloud 2025.0.3, Spring Security, Spring Data JPA (Hibernate 6),
-Flyway, PostgreSQL 16, springdoc-openapi 2.8, Micrometer; React 19, TypeScript 5.9, Vite 7, React Router 7,
+Flyway, PostgreSQL 16, RabbitMQ 4.1 (Spring AMQP), Resilience4j 2.2, Thymeleaf, Mailpit 1.27, springdoc-openapi
+2.8, Micrometer, Prometheus 3.5 and Grafana 12.1 (optional), Caddy 2.10 (production overlay), nginx 1.27; React 19, TypeScript 5.9, Vite 7, React Router 7,
 TanStack Query 5, React Hook Form, Zod 4, Tailwind CSS 4, Recharts 3; JUnit 5, Mockito, Testcontainers, Vitest,
-Testing Library, axe-core; Docker Compose; GitHub Actions (configured).
+Testing Library, axe-core, JaCoCo 0.8.13, k6 1.1; Docker Compose; GitHub Actions (configured).
 
-**Minimum to run the stack:** a 64-bit machine with Docker and about 4 GB of memory available to Docker.
+**Minimum to run the stack:** a 64-bit machine with Docker and about 4 GB of memory available to Docker (measured
+use ≈ 3 GB for 23 containers).
 
 ## 10. Technology selection and justification
 
@@ -181,23 +202,27 @@ Testing Library, axe-core; Docker Compose; GitHub Actions (configured).
 | RabbitMQ + transactional outbox | durable fan-out of domain events to several consumers; the outbox makes publishing atomic with the state change |
 | Mailpit + Thymeleaf | HTML e-mails rendered from templates and captured by a local SMTP server, so no real mail is sent during development |
 | React + TypeScript + Vite | typed, component-based UI with fast builds and code splitting |
-| Testcontainers | integration tests against the real database engine and its constraints |
+| Resilience4j | circuit breakers and retries for the gateway routes and service-to-service calls |
+| Testcontainers | integration tests against the real database engine, broker and SMTP server |
+| nginx + Caddy | load balancing in front of the gateways; automatic HTTPS for the production overlay |
 | Docker Compose | reproducible multi-service environment on one machine |
 
 ## 11. System architecture
 
-The system has six deployable backend components (gateway, discovery server, four business services), a static
-frontend served by nginx, and PostgreSQL. Communication:
+The system has seven Spring Boot applications (gateway, discovery server, five business services) deployed as
+11 containers (two Eureka servers, two gateways, two booking replicas), a static frontend and a gateway load
+balancer served by nginx, RabbitMQ, Mailpit and five PostgreSQL servers — 23 containers in total. Communication:
 
-* **Synchronous** REST over HTTP with explicit timeouts (2 s connect, 5–8 s read) and bounded retries (3
-  attempts, exponential backoff with jitter) applied only to idempotent operations.
+* **Synchronous** REST over HTTP with explicit timeouts (gateway connect 1 s / response 15 s; booking → room and
+  payment connect 2 s, read 5–8 s), Resilience4j retries (3 attempts, exponential backoff with jitter, transient
+  failures only) and circuit breakers.
 * **Asynchronous** domain events (`BOOKING_CREATED/CONFIRMED/CANCELLED`, `HOLD_EXPIRED`, `PAYMENT_SUCCEEDED/FAILED`)
   through RabbitMQ: producers write them to a transactional outbox and publish with publisher confirms; each
   consumer (booking-service, notification-service) has a durable queue with retries and a dead-letter queue, and
   de-duplicates by event id.
-* **Discovery and load balancing:** services register in Eureka; the gateway uses `lb://` routes and the booking
-  and payment services use load-balanced HTTP clients. With two room-service instances, 60 gateway requests were
-  served 30/30 and the booking service's internal calls 4/4 (measured).
+* **Discovery and load balancing:** services register in both Eureka servers; the gateways use `lb://` routes and
+  the booking service uses load-balanced HTTP clients; nginx balances requests across the two gateways (measured
+  15/15 per gateway in the failover baseline).
 * **Correlation:** the gateway assigns an `X-Correlation-Id` that every service logs and forwards.
 
 Detailed diagrams (context, sequence, state machines, deployment) are in `docs/architecture/ARCHITECTURE.md`.
@@ -206,12 +231,13 @@ Detailed diagrams (context, sequence, state machines, deployment) are in `docs/a
 
 | Service | Responsibilities | Data owned |
 |---|---|---|
-| discovery-server | registry of service instances (HTTP Basic protected) | — |
-| api-gateway | routing, token pre-validation, CORS, per-IP rate limits, size limits, uniform errors, aggregated API docs | — |
+| discovery-server (×2, peers) | replicated registry of service instances (HTTP Basic protected) | — |
+| api-gateway (×2) + gateway-lb | routing, token pre-validation, CORS, per-IP rate limits, size limits, circuit breakers with fallback, connect-failure retry, uniform errors, aggregated API docs | — |
 | auth-service | accounts, BCrypt passwords, lockout, JWT issuance, JWKS, rotating refresh tokens, roles, service credentials, bootstrap administrator | users, roles, refresh tokens, auth audit |
 | room-service | catalogue, photographs, operational status, search, availability, holds/allocations, dynamic pricing, policy versions, occupancy, inventory audit | rooms, types, amenities, images, allocations, pricing policies, inventory events |
-| booking-service | reservations, saga orchestration, price snapshots, cancellation policy, payment-event inbox, recovery of stuck bookings | bookings, guests, snapshots, history, processed events |
-| payment-service | payment intents and attempts, provider abstraction (simulated provider), webhooks, refunds, reconciliation, outbox | payments, attempts, refunds, payment events, webhook receipts, outbox |
+| booking-service (×2) | reservations, saga orchestration, price snapshots, cancellation policy, payment-event consumer (RabbitMQ) with inbox, booking-event outbox, recovery of stuck bookings | bookings, guests, snapshots, history, processed events, outbox |
+| payment-service | payment intents and attempts, gateway abstraction (simulated, Razorpay test mode), webhooks, refunds, reconciliation, outbox | payments, attempts, refunds, payment events, webhook receipts, outbox |
+| notification-service | consumes booking/payment events, booking-contact read model, Thymeleaf e-mails without duplicates, staff list of sent e-mails | booking contacts, notifications |
 
 ## 13. Database design
 
@@ -349,43 +375,54 @@ test API because no test keys were available.
 * **Database-level invariants** for overlap, uniqueness and amounts.
 * **Idempotency everywhere:** bookings, holds (per booking id), payments (per booking id), payment attempts,
   provider charges, refunds and events.
-* **Outbox + inbox:** payment outcomes are stored atomically with the state change and applied exactly once.
+* **Outbox + inbox:** booking and payment events are stored atomically with the state change, published to
+  RabbitMQ with publisher confirms, and applied once by idempotent consumers (inbox table; unique
+  `(event_id, notification_type)` for e-mails). Failed messages are retried with backoff and then moved to a
+  dead-letter queue.
 * **Recovery and reconciliation jobs** drive any interrupted workflow to a final state, using database state only
-  (they survive restarts) and `SKIP LOCKED` / compare-and-set transitions (safe with several instances).
+  (they survive restarts) and `SKIP LOCKED` / compare-and-set transitions (safe with several instances — the
+  booking service runs as two replicas).
 * **Per-room serialisation:** holds take a row lock on the room so concurrent requests for the same room queue
   instead of deadlocking in the exclusion constraint (a deadlock was observed and fixed during development).
 
 ## 21. Testing methodology
 
 Layered testing: unit tests for pure logic; MockMvc tests for validation and security; integration tests against
-real PostgreSQL 16 with Testcontainers; gateway tests against a stub upstream with real RS256 tokens; contract tests
-that check the messages exchanged between services from both sides; frontend unit, component and accessibility
-tests; and live tests on the Docker stack (end-to-end, consistency audit, load test, load-balancing measurement,
-browser and responsive inspection at six viewport widths).
+real PostgreSQL 16, RabbitMQ 4.1 and Mailpit with Testcontainers; gateway tests against a stub upstream with real
+RS256 tokens; contract tests that check the messages exchanged between services from both sides (including the
+RabbitMQ events); Razorpay tests against a fake Razorpay API; frontend unit, component and accessibility tests;
+and live tests on the Docker stack (end-to-end, consistency audit, failover, k6 load test, browser and responsive
+inspection). Code coverage is measured with JaCoCo.
 
-**Measured results (21–22 October 2026):**
+**Measured results (21–22 October 2026, one Apple Silicon laptop):**
 
 | Activity | Result |
 |---|---|
-| Backend `mvn clean verify` | 148 tests, 0 failures, 0 errors, 0 skipped |
-| Frontend lint, type check, tests, build | passed; 24 tests |
-| End-to-end smoke test (52 checks) | 52 passed, 0 failed (also with two room-service instances) |
-| Consistency audit | passed: 10-way race → 1 booking; 5 duplicate submissions → 1 booking; back-to-back stays accepted; cancellation races never produced two active bookings; declined payment released the room; 5 concurrent payment confirmations → 1 authorisation |
-| Load test (20 virtual users, 30 s, one laptop) | 33 598 requests, 1 119 req/s, p95 47 ms (search) / 32 ms (quote), 0 errors |
-| Load balancing (2 instances) | 30/30 gateway requests; 4/4 internal calls |
-| Responsive inspection | 375, 390, 430, 768, 1024, 1440 px — defects found and fixed (Section 25) |
+| Backend `mvn -B clean verify` | **196 tests, 0 failures, 0 errors, 0 skipped** |
+| Code coverage (JaCoCo aggregate) | **86.4 % of lines (3 871 / 4 479), 65.8 % of branches (952 / 1 447)** |
+| Frontend lint, type check, tests, build | passed; **29 tests** (incl. axe accessibility checks) |
+| End-to-end smoke test | **56/56** checks (incl. 4 e-mails verified in Mailpit), on the high-availability stack |
+| Database isolation check | 40/40 (five PostgreSQL servers, no cross-service roles) |
+| Failover (kill one gateway, one Eureka, one booking replica) | run A 99/100 requests + 4/4 bookings; run B 100/100 + 4/4 |
+| k6 load test (ramp to 20 virtual users, 55 s, 0.2 s think time) | 7 275 requests (120.9 req/s), 0 % errors; search median 17.6 ms / p95 135.9 ms; quote median 10.6 ms / p95 60.8 ms |
+| Contention (k6: 10 customers book the same room at once) | **1 accepted, 9 refused (409)**, 0 unexpected |
+| Consistency audit (earlier phase) | 10-way race → 1 booking; duplicate submissions → 1 booking; 5 concurrent payment confirmations → 1 authorisation |
+| Production overlay over HTTPS (local, `GV_DOMAIN=localhost`) | smoke test 52/52 (e-mail checks skipped) |
+| Responsive inspection | 375, 390, 430, 768, 1024, 1440 px (Chromium emulation); payment page re-checked at 375 px after Phase 3 |
 
-Complete results and commands: `docs/testing/TESTING.md`; raw outputs: `docs/testing/evidence/`.
+An earlier load test with a Node.js script and no think time measured 1 119 req/s (search + quote, one gateway);
+the k6 figures above use think time and two gateways and are therefore not comparable throughput maxima. Complete
+results and commands: `docs/testing/TESTING.md`; raw outputs: `docs/testing/evidence/`.
 
 ## 22. Deployment architecture
 
-Seven Docker images (multi-stage builds, non-root runtime users, health checks) and four PostgreSQL servers (one per
-service) run in one Compose
-project on a private network. Only the web application (port 3000) and the gateway (8080) are published; Eureka and
-PostgreSQL are bound to the loopback interface. Secrets come from a generated, git-ignored `.env` file and a
-generated RSA key pair mounted read-only. A cloud deployment path (managed containers, managed PostgreSQL, secret
-manager, HTTPS load balancer) is documented in `docs/deployment/DEPLOYMENT.md`; **no cloud deployment was
-performed**.
+Seven Docker images (multi-stage builds, non-root runtime users, health checks) run as 23 containers in one Compose
+project on a private network: two Eureka servers, two gateways behind an nginx load balancer, auth, room, two
+booking replicas, payment and notification services, five PostgreSQL servers (one per service), RabbitMQ, Mailpit
+and the web application. Only the web application (3000) and the load balancer (8080) are published; databases,
+RabbitMQ, Mailpit and Eureka are bound to the loopback interface. Secrets come from a generated, git-ignored `.env`
+file and a generated RSA key pair mounted read-only. Java memory settings were tuned (heap 60 % of a 448 MiB limit,
+metaspace/code-cache caps, `MALLOC_ARENA_MAX=2`) so that the stack fits in about 3 GB.
 
 **High availability.** Two Eureka servers replicate their registries to each other; two API gateway instances run
 behind an nginx load balancer (and the web server's own upstream); the booking service runs as two replicas.
@@ -396,27 +433,38 @@ turn while sending requests and making complete bookings. Two recorded runs: 99 
 succeeded, and all 8 bookings completed (`docs/testing/evidence/failover-demo.txt`). The single failure was a request
 already in flight to the gateway at the moment it was killed.
 
+**Cloud.** A production overlay (`docker-compose.prod.yml`) publishes only Caddy (ports 80/443, automatic Let's
+Encrypt certificates, HSTS) and switches the services to the `prod` profile; `scripts/deploy.sh` deploys and
+smoke-tests it on a single VM. The recommended free target is an Oracle Cloud Always Free ARM VM (4 OCPU, 24 GB).
+The overlay was tested locally over HTTPS; **no cloud deployment was performed** (no cloud account was available).
+
+**CI.** A GitHub Actions workflow builds and tests the backend with coverage, checks the frontend, builds the images,
+starts the full stack and runs the smoke test. **It has not yet run on GitHub** (no repository was configured).
+
 ## 23. Security considerations
 
 Threats addressed include brute force (lockout, rate limits), token theft (in-memory access tokens, HttpOnly
 refresh cookie with rotation and reuse detection), CSRF (SameSite=Strict plus a required header on the two cookie
 endpoints), insecure direct object references (ownership checks returning 404), mass assignment (request DTOs),
-price and payment tampering (server-side pricing, provider-only outcomes), forged callbacks (HMAC with timestamp
-and de-duplication), malicious uploads (content sniffing, size limits, generated names, path checks) and secret
-leakage (git-ignored generated secrets, masked logging). Residual risks — e.g. access tokens valid for up to 15
-minutes after logout, in-memory rate limiting per gateway instance, the simulated provider — are listed in
-`docs/security/SECURITY.md`.
+price and payment tampering (server-side pricing, provider-only outcomes; Razorpay results are signature-checked
+and then verified with Razorpay's API), forged callbacks (HMAC signatures, timestamps, de-duplication), malicious
+uploads (content sniffing, size limits, generated names, path checks) and secret leakage (git-ignored generated
+secrets, masked logging; live Razorpay keys refused). A validation review found and fixed one defect: an empty
+request body to the account-status endpoint used to disable the account. Residual risks — e.g. access tokens valid
+for up to 15 minutes after logout, per-instance rate limiting — are listed in `docs/security/SECURITY.md`.
 
 ## 24. Implementation summary
 
-| Part | Size (approximate) |
+| Part | Size |
 |---|---|
-| Backend services and shared library | 6 Spring Boot applications + 1 library (Java 21) |
-| Database migrations | 5 Flyway migrations across 4 databases |
-| REST handler methods | 64 (54 public, 10 internal service-to-service) |
-| Frontend | about 20 client-side routes (customer and admin), typed API client, design system |
-| Automated tests | 148 backend + 24 frontend |
-| Scripts | environment generator, reset, end-to-end test, consistency audit, load test |
+| Backend | 7 Spring Boot applications (gateway, discovery, auth, room, booking, payment, notification) + 1 shared library, Java 21 |
+| Database migrations | 8 Flyway migrations across 5 databases |
+| REST handler methods | 67 (57 public, 10 internal service-to-service) |
+| Domain events | 6 event types on RabbitMQ, 2 consumer queues with dead-letter queues |
+| Frontend | 13 page modules plus the administration area (about 20 client-side routes), typed API client, design system |
+| Automated tests | 196 backend + 29 frontend |
+| Scripts | environment generator, reset, end-to-end test, DB isolation check, failover demo, consistency audit, Node and k6 load tests, coverage summary, deploy |
+| Containers | 23 (25 with the optional Prometheus/Grafana profile) |
 
 ## 25. Results and screenshots
 
@@ -431,57 +479,68 @@ fixed, which illustrates the value of the test layers:
 | live stack | services flapping UP/DOWN in Eureka | Eureka health indicator excluded from published health |
 | live browser test | 500 error on "upcoming bookings" (null date parameter in PostgreSQL) | dynamic filters rewritten with JPA Specifications + regression tests |
 | responsive audit | header overflow at 768 px for administrators; admin pages wider than a phone screen; dialog not scrollable on short screens; small tap targets | breakpoints, grid sizing, positioned scroll containers, scrollable dialog, larger targets |
+| fresh-start smoke test | checks failed while Eureka was still propagating instances | smoke test waits until every service is routable |
+| RabbitMQ integration test | duplicate events processed concurrently call the (idempotent) room confirm twice | documented and asserted: one transition, one event |
+| Razorpay integration test | webhook path blocked by the payment-service security rules | path allowed; signature verified in the handler |
+| failover demo | request to a killed booking replica failed (`NoRouteToHostException` not retried); 2 s penalty per request until eviction | connect-failure retry extended; 1 s connect timeout; faster Eureka eviction |
+| validation review | empty status body disabled a user account | field required |
+| production overlay test | `/internal/*` answered by the web app instead of 404 | Caddy returns 404 |
 
-Screenshots (to be captured by the student from the running application; none are embedded because this report
-must not contain fabricated images):
+Screenshots — to be captured by the student from the running application (none are embedded, so that the report
+contains no fabricated images). The numbers match the capture guide in `docs/DEMO_SCRIPT.md`:
 
-* `[Screenshot: home page with search bar]`
-* `[Screenshot: search results with dynamic stay prices]`
-* `[Screenshot: room details with itemised quote]`
-* `[Screenshot: checkout and simulated payment page with hold countdown]`
-* `[Screenshot: confirmation page — "Waiting for payment confirmation" then "Your stay is confirmed"]`
-* `[Screenshot: customer dashboard and booking timeline]`
-* `[Screenshot: administrator overview with occupancy and booking charts]`
-* `[Screenshot: Eureka dashboard with all services UP]`
-* `[Screenshot: Swagger UI at the gateway]`
-* `[Screenshot: terminal output of scripts/e2e-smoke.sh and scripts/consistency-audit.mjs]`
+* `[Screenshot 1: home page with search bar]`
+* `[Screenshot 2: search results with dynamic stay prices]`
+* `[Screenshot 3: room details with itemised price quote]`
+* `[Screenshot 4: payment page with hold countdown and test payment methods]`
+* `[Screenshot 5: confirmation page — "Your stay is confirmed"]`
+* `[Screenshot 6: confirmation e-mail and payment receipt in Mailpit]`
+* `[Screenshot 7: customer dashboard and booking timeline]`
+* `[Screenshot 8: administrator overview with occupancy and booking charts]`
+* `[Screenshot 9: Eureka dashboards (8761 and 8762) with all services and two instances of gateway and booking]`
+* `[Screenshot 10: RabbitMQ management UI — queues with consumers and empty dead-letter queues]`
+* `[Screenshot 11: terminal output of scripts/failover-demo.sh (summary table)]`
+* `[Screenshot 12: Grafana "GrandVista — service overview" dashboard]`
+* `[Screenshot 13: Swagger UI at the gateway]`
+* `[Screenshot 14: GitHub Actions run with all jobs green and the README badge]` *(only after CI has run)*
 
-## 26. Limitations
+## 26. Limitations and future work
 
-* Payments use the simulated provider by default; the Razorpay test-mode gateway is tested only against a fake
-  Razorpay API (no test keys were available). No live payments are possible.
-* The system has not been deployed to a cloud platform; the CI workflow has not been executed on GitHub.
-* Gateway rate limiting is in memory (single gateway instance); Eureka and the gateway were not run in multiple
-  instances.
-* E-mails are captured by a local SMTP server (Mailpit); no real e-mail provider is configured. No multi-property
-  or multi-currency support.
-* Performance figures come from a single laptop and are not production capacity estimates.
-* Responsive testing used browser emulation, not physical devices.
+**Still simulated or not done (as of 22 October 2026):**
 
-## 27. Future enhancements
+* **Payments:** the simulated provider is the default. The Razorpay test-mode gateway is implemented and tested
+  against a fake Razorpay API but has **not** been run against Razorpay's real test API (no keys). No live payments.
+* **Cloud:** **not deployed**; the production overlay was tested only on the development machine.
+* **CI:** the workflow has **not** run on GitHub (no repository configured), so there is no CI badge yet.
+* **E-mail:** captured locally by Mailpit; no real e-mail provider.
+* **Availability:** Eureka, gateways and booking run twice; auth, room, payment, notification, RabbitMQ and each
+  PostgreSQL server run once. Rate limits are per gateway instance (a client can reach twice the limit).
+* **Evidence:** performance figures come from one laptop; responsive checks used browser emulation, not phones;
+  e-mails, failover and load tests ran locally.
 
-1. Integrate a real payment provider (implementing the existing `PaymentProvider` interface and its webhook
-   signature scheme).
-2. Connect a real e-mail provider (SMTP relay or API) in place of Mailpit; add SMS notifications.
-3. Redis-backed rate limiting shared by the gateway instances; caching of catalogue reads; replicas of the remaining
-   single-instance services and of RabbitMQ and PostgreSQL.
-4. Cloud deployment with managed PostgreSQL, a secret manager, HTTPS and centralised logging and tracing
-   (OpenTelemetry).
-5. E-mail/SMS notifications for confirmations, reminders and refunds.
-6. Overbooking and room-type (rather than specific-room) inventory, multi-property support, loyalty programmes.
-7. Demand forecasting from historical bookings to inform pricing policies.
+**Future work:**
 
-## 28. Conclusion
+1. Run the Razorpay flow against Razorpay's test API, then the e2e test in Razorpay mode.
+2. Deploy to the recommended VM and run the CI workflow on GitHub; add continuous deployment over SSH.
+3. Real e-mail provider (SMTP relay or API) and SMS notifications; reminders before check-in.
+4. Redis-backed rate limiting shared by the gateways; replicas of the remaining services; RabbitMQ quorum queues;
+   PostgreSQL replication and automated backups.
+5. Distributed tracing (OpenTelemetry) alongside the existing correlation IDs.
+6. Room-type inventory with overbooking control, multi-property support, demand forecasting for pricing.
+
+## 27. Conclusion
 
 The project shows that the guarantees a hotel needs — no double bookings, honest prices, no payment without a
 reservation — can be preserved across independently deployed services by combining database-level invariants,
-idempotent operations, an orchestrated saga with compensations, a transactional outbox and recovery jobs, rather
-than distributed transactions. Spring Cloud provided the service infrastructure (gateway, discovery, load
-balancing), and layered automated tests — especially integration tests against a real database and live tests
-against the running system — found and fixed defects that unit tests alone would have missed. The resulting
-platform runs end to end on a single machine and is documented for further development and deployment.
+idempotent operations, an orchestrated saga with compensations, transactional outboxes with a message broker and
+recovery jobs, rather than distributed transactions. Spring Cloud provided the service infrastructure (gateway,
+discovery, load balancing), Resilience4j and replicated instances kept the system answering when a gateway, a
+Eureka server or a booking replica was killed, and layered automated tests — especially integration tests against
+a real database, broker and SMTP server and live tests against the running system — found and fixed defects that
+unit tests alone would have missed. The resulting platform runs end to end on a single machine and is prepared for
+deployment to a free cloud VM.
 
-## 29. References
+## 28. References
 
 1. Richardson, C. *Microservices Patterns: With Examples in Java.* Manning, 2018 (saga, transactional outbox, API gateway patterns).
 2. Newman, S. *Building Microservices*, 2nd ed. O'Reilly, 2021.
@@ -492,8 +551,12 @@ platform runs end to end on a single machine and is documented for further devel
 7. PostgreSQL 16 Documentation — Range Types; Exclusion Constraints; `SELECT … FOR UPDATE SKIP LOCKED`. https://www.postgresql.org/docs/16/
 8. IETF RFC 7519, *JSON Web Token (JWT)*, 2015; RFC 7517, *JSON Web Key (JWK)*, 2015.
 9. IETF RFC 6749, *The OAuth 2.0 Authorization Framework* (client-credentials grant), 2012.
-10. IETF RFC 9457, *Problem Details for HTTP APIs*, 2023.
-11. OWASP Cheat Sheet Series — Authentication, Session Management, CSRF Prevention, File Upload. https://cheatsheetseries.owasp.org/
-12. Testcontainers for Java documentation. https://java.testcontainers.org/
-13. React and TypeScript documentation. https://react.dev/ ; https://www.typescriptlang.org/docs/
-14. W3C, *Web Content Accessibility Guidelines (WCAG) 2.2*, 2023.
+10. IETF RFC 9457, *Problem Details for HTTP APIs*, 2023 (obsoletes RFC 7807).
+11. RabbitMQ Documentation — Publisher Confirms; Dead Letter Exchanges. https://www.rabbitmq.com/docs/
+12. Resilience4j Documentation — CircuitBreaker, Retry. https://resilience4j.readme.io/
+13. Razorpay Documentation — Orders API, Payment signature verification, Webhooks (test mode). https://razorpay.com/docs/
+14. Hohpe, G.; Woolf, B. *Enterprise Integration Patterns.* Addison-Wesley, 2003 (idempotent receiver, dead letter channel).
+15. OWASP Cheat Sheet Series — Authentication, Session Management, CSRF Prevention, File Upload. https://cheatsheetseries.owasp.org/
+16. Testcontainers for Java documentation. https://java.testcontainers.org/
+17. React and TypeScript documentation. https://react.dev/ ; https://www.typescriptlang.org/docs/
+18. W3C, *Web Content Accessibility Guidelines (WCAG) 2.2*, 2023.

@@ -101,11 +101,14 @@ REST APIs and events.
   an instance whose database is down is reported DOWN and skipped). Callers use Spring Cloud LoadBalancer
   through a `@LoadBalanced RestClient.Builder` with logical URLs such as `http://room-service`. The gateway uses
   `lb://` route URIs. Route targets can be overridden with direct URLs (`GV_ROUTE_*`) for runs without Eureka.
-* **Timeouts.** Every outbound call has explicit connect/read timeouts (2 s / 5–8 s); gateway: 2 s connect,
+* **Timeouts.** Every outbound call has explicit connect/read timeouts (2 s / 5–8 s); gateway: 1 s connect,
   15 s response.
-* **Retries.** `platform-commons` `Retrier`: at most 3 attempts, exponential backoff with ±20% jitter, only for
-  transport failures and 502/503/504, and **only for operations that are idempotent on the callee** (every
-  internal command carries a booking id, payment id or idempotency key). 4xx responses are never retried.
+* **Retries and circuit breakers (Resilience4j).** booking-service → room/payment: at most 3 attempts,
+  exponential backoff with ±20 % jitter, only for transport failures and 502/503/504 (`TransientFailure`), and
+  **only for operations that are idempotent on the callee** (every internal command carries a booking id, payment
+  id or idempotency key); a circuit breaker per service opens at ≥ 50 % failures and then fails fast with
+  `503 DEPENDENCY_UNAVAILABLE`. 4xx responses are never retried and never open the circuit. The gateway has its own
+  circuit breaker per route (fallback `503` + `Retry-After`) and retries only failed connections.
 * **Contracts.** Each consumer declares its own DTOs (no shared entity classes). Example messages in
   [`/contracts`](../../contracts) are verified by both provider and consumer tests. Internal APIs are versioned
   under `/internal/v1`, public APIs under `/api/v1`; the payment event carries `schemaVersion`.

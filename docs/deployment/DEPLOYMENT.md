@@ -217,7 +217,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml cp caddy:/data/c
 CURL_CA_BUNDLE=/tmp/caddy-root.crt MAILPIT_URL= ./scripts/e2e-smoke.sh https://localhost
 ```
 
-Results are recorded in [TESTING.md](../testing/TESTING.md#production-overlay-local-https-test).
+Results are recorded in [TESTING.md](../testing/TESTING.md#production-overlay-local-https-test-22-oct-2026).
 
 ### Production-grade alternative (not free)
 

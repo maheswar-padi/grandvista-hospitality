@@ -1,0 +1,8 @@
+GrandVista k6 load test
+requests total: 7275 (120.9 req/s overall)
+search: avg 38.1 ms, median 17.6 ms, p95 135.9 ms, p99 364.5 ms, max 917.9 ms
+quote: avg 22.3 ms, median 10.6 ms, p95 60.8 ms, p99 259.0 ms, max 1099.3 ms
+contended-booking: avg 2320.5 ms, median 2348.5 ms, p95 2627.4 ms, p99 2628.1 ms, max 2628.2 ms
+browse failure rate: 0.00 %
+contention: 1 accepted, 9 refused (409), 0 unexpected
+all thresholds passed

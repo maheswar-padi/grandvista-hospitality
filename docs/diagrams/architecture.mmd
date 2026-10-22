@@ -1,0 +1,28 @@
+flowchart LR
+  user([Browser]) -->|HTTPS 443 / :3000| fe[Web app<br/>nginx + React]
+  api([API client]) -->|:8080| lb[gateway-lb<br/>nginx]
+  fe --> gw1[API gateway 1]
+  fe --> gw2[API gateway 2]
+  lb --> gw1
+  lb --> gw2
+  subgraph discovery[Service discovery]
+    e1[(Eureka 1)] <-->|replication| e2[(Eureka 2)]
+  end
+  gw1 & gw2 -->|lb:// · circuit breaker · retry| auth[auth-service]
+  gw1 & gw2 --> room[room-service]
+  gw1 & gw2 --> b1[booking-service ×2]
+  gw1 & gw2 --> pay[payment-service]
+  gw1 & gw2 --> notif[notification-service]
+  b1 -->|holds · confirm · release| room
+  b1 -->|payments · refunds| pay
+  pay -->|payment.* outbox| mq{{RabbitMQ<br/>grandvista.events}}
+  b1 -->|booking.* outbox| mq
+  mq -->|booking.payment-events| b1
+  mq -->|notification.events| notif
+  notif -->|SMTP| mail[Mailpit]
+  pay -. test mode .-> rzp[(Razorpay API)]
+  auth --- d1[(auth-db)]
+  room --- d2[(room-db)]
+  b1 --- d3[(booking-db)]
+  pay --- d4[(payment-db)]
+  notif --- d5[(notification-db)]

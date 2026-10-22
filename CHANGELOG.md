@@ -5,6 +5,18 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Phase 8 — Report, demo and final polish
+- **Added:** k6 load test (`load/k6/load-test.js`, `scripts/load-test-k6.sh`, which raises and restores the
+  gateways' rate limits); architecture and event-flow diagrams as Mermaid source + PNG (`docs/diagrams/`);
+  `scripts/start.sh` (one-command start).
+- **Changed:** academic report (architecture, DB per service, events, HA, payments, CI/CD, measured results,
+  numbered screenshot placeholders, limitations and future work), README (overview, diagram, quick start, URLs,
+  demo sign-ins, troubleshooting, limitations), 7–10 minute demo script with a screenshot capture guide,
+  traceability matrix, testing and architecture documents.
+- **Verified (final run, 22 Oct 2026):** backend 196 tests, 0 failures; coverage 86.4 % lines / 65.8 % branches;
+  frontend 29 tests + lint + type check + build; e2e 56/56; k6: 0 % errors, search p95 135.9 ms, quote p95 60.8 ms,
+  contention 1 accepted / 9 refused.
+
 ### Phase 7 — Cloud deployment preparation (no deployment performed)
 - **Added:** `docker-compose.prod.yml` (Caddy with automatic HTTPS as the only published service, `prod` profile,
   CORS and e-mail links on `https://GV_DOMAIN`), `infrastructure/docker/caddy/Caddyfile`, `scripts/deploy.sh`,

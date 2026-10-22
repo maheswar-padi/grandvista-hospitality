@@ -10,7 +10,7 @@ Raw outputs of the live runs are kept in [`evidence/`](evidence). Nothing here i
 |---|---|---|---|
 | Unit | pricing formula and rounding, stay/overlap rules, booking & payment state machines, cancellation policy, webhook signatures, outbox backoff, retry policy, correlation IDs, client-credential checks, lockout | JUnit 5, AssertJ, parameterised tests | `*Test.java` in `domain`, `pricing`, `provider`, `client`, `service` packages |
 | Controller + security | validation, status codes, problem format, role and ownership rules, CSRF header, internal-API isolation | MockMvc with `spring-security-test` JWTs | `*IntegrationTest.java` |
-| Integration (real database) | Flyway migrations, `ddl-auto=validate`, exclusion constraint under concurrency, locking, idempotency keys, specifications, scheduled jobs | **Testcontainers PostgreSQL 16** | `AuthFlowIntegrationTest`, `RoomInventoryIntegrationTest`, `HoldExpirySchedulingIntegrationTest`, `BookingSagaIntegrationTest`, `BookingRecoverySchedulingTest`, `PaymentFlowIntegrationTest` |
+| Integration (real database) | Flyway migrations, `ddl-auto=validate`, exclusion constraint under concurrency, locking, idempotency keys, specifications, scheduled jobs | **Testcontainers PostgreSQL 16, RabbitMQ 4.1, Mailpit 1.27** | `AuthFlowIntegrationTest`, `RoomInventoryIntegrationTest`, `CatalogueAdminIntegrationTest`, `HoldExpirySchedulingIntegrationTest`, `BookingSagaIntegrationTest`, `BookingRecoverySchedulingTest`, `BookingMessagingIntegrationTest`, `PaymentFlowIntegrationTest`, `RazorpayFlowIntegrationTest` (fake Razorpay API), `RabbitOutboxPublisherIntegrationTest`, `NotificationFlowIntegrationTest` |
 | Gateway | routing, JWT validation (RS256 via JWKS), CORS, rate limiting, size limits, hidden internal paths | real gateway + reactor-netty stub upstream | `GatewayIntegrationTest` |
 | Contract | messages exchanged by services keep their fields; clients parse them; timeouts are bounded | shared JSON in `/contracts`, MockRestServiceServer, real slow HTTP server | `DownstreamContractTest`, `OutboxRelayContractTest`, provider checks in the integration tests |
 | Frontend | API client, validation schemas, redirect safety, key components and flows, authoritative confirmation, booking history states, accessibility (axe-core) | Vitest, Testing Library, jsdom, axe-core | `frontend/src/**/*.test.ts(x)` |
@@ -45,52 +45,52 @@ node scripts/load-test.mjs --vus 20 --duration 30 --contenders 10
 ```
 Start the gateway with `GV_API_RATE_LIMIT=1000000 GV_AUTH_RATE_LIMIT=1000` for a throughput run.
 
-## 3. Backend results — `mvn -B clean verify` (22 Oct 2026, after Phase 5): **196 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
+## 3. Backend results — `mvn -B clean verify` (22 Oct 2026, final run after Phase 8): **196 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
 
-The baseline (before Phases 1–5) was 148 tests. New classes are marked *(new)*. Per-module totals in the
-Phase 5 run: platform-commons 4, discovery 2, gateway 22, auth 19, room 34, booking 55, payment 52,
-notification 8. (The table below lists classes; counts of classes changed in Phases 4–5 are in CHANGELOG.md.)
+The baseline (before Phases 1–5) was 148 tests. New classes are marked *(new)*. Per-module totals:
+platform-commons 4, discovery 2, gateway 22, auth 19, room 34, booking 55, payment 52, notification 8.
 
-### Code coverage (JaCoCo, same run)
+### Code coverage (JaCoCo, final run)
 
 Aggregate report over all modules (`coverage/target/site/jacoco-aggregate/index.html`, summary by
-`./scripts/coverage-summary.sh`): **86.6 % of lines (3,877 of 4,479), 66.0 % of branches (955 of 1,447)**.
+`./scripts/coverage-summary.sh`): **86.4 % of lines (3,871 of 4,479), 65.8 % of branches (952 of 1,447)** (the Phase 5 run measured 86.6 % / 66.0 %; timing-dependent paths vary slightly between runs).
 Per module (own tests only): gateway 93.2 %, auth 90.7 %, booking 85.6 %, room 85.4 %, payment 86.1 %,
 notification 94.1 %, discovery 83.3 % lines. Coverage measures the automated test suite only; the live e2e,
 failover and load tests are not included in it.
 
 | Module | Test class | Tests |
 |---|---|---|
-| platform-commons | RetrierTest | 4 |
-| | CorrelationIdTest | 2 |
-| | EventTopologyTest *(new)* | 2 |
+| platform-commons | CorrelationIdTest | 2 |
+|  | EventTopologyTest | 2 |
 | discovery-server | DiscoveryServerApplicationTests | 2 |
-| api-gateway | GatewayIntegrationTest | 9 |
-| auth-service | AuthFlowIntegrationTest (+ demo accounts) | 12 |
-| | UserAccountTest | 3 |
-| | ServiceClientAuthenticatorTest | 3 |
-| room-service | RoomInventoryIntegrationTest | 14 |
-| | HoldExpirySchedulingIntegrationTest | 3 |
-| | PricingEngineTest | 8 |
-| | StayDatesTest | 2 |
-| | MediaStorageTest | 2 |
-| | PricingPolicyValidationTest | 2 |
-| booking-service | BookingSagaIntegrationTest | 15 |
-| | BookingRecoverySchedulingTest | 1 |
-| | DownstreamContractTest | 5 |
-| | BookingRulesTest | 24 |
-| | BookingMessagingIntegrationTest *(new; real RabbitMQ)* | 3 |
-| payment-service | PaymentFlowIntegrationTest | 15 |
-| | PaymentStatusTest | 18 |
-| | WebhookSignatureTest | 2 |
-| | OutboxRelayContractTest | 3 |
-| | RabbitOutboxPublisherIntegrationTest *(new; real RabbitMQ)* | 3 |
-| | RazorpayFlowIntegrationTest *(new; fake Razorpay API)* | 8 |
-| | RazorpaySignaturesTest *(new; openssl vectors)* | 3 |
-| notification-service *(new)* | NotificationFlowIntegrationTest (real RabbitMQ + Mailpit + PostgreSQL) | 4 |
-| | EmailComposerTest | 2 |
-| | EventContractTest | 2 |
-| **Total** | | **165** |
+| api-gateway | GatewayErrorHandlerTest | 10 |
+|  | GatewayIntegrationTest | 12 |
+| auth-service | AuthFlowIntegrationTest | 13 |
+|  | ServiceClientAuthenticatorTest | 3 |
+|  | UserAccountTest | 3 |
+| room-service | CatalogueAdminIntegrationTest | 3 |
+|  | HoldExpirySchedulingIntegrationTest | 3 |
+|  | MediaStorageTest | 2 |
+|  | PricingEngineTest | 8 |
+|  | PricingPolicyValidationTest | 2 |
+|  | RoomInventoryIntegrationTest | 14 |
+|  | StayDatesTest | 2 |
+| booking-service | BookingMessagingIntegrationTest | 3 |
+|  | BookingRecoverySchedulingTest | 1 |
+|  | BookingRulesTest | 24 |
+|  | BookingSagaIntegrationTest | 20 |
+|  | DownstreamContractTest | 7 |
+| payment-service | OutboxRelayContractTest | 3 |
+|  | PaymentFlowIntegrationTest | 15 |
+|  | PaymentStatusTest | 18 |
+|  | RabbitOutboxPublisherIntegrationTest | 3 |
+|  | RazorpayFlowIntegrationTest | 8 |
+|  | RazorpaySignaturesTest | 3 |
+|  | WebhookSignatureTest | 2 |
+| notification-service | EmailComposerTest | 2 |
+|  | EventContractTest | 2 |
+|  | NotificationFlowIntegrationTest | 4 |
+| **Total** | | **196** |
 
 ### Scenario coverage (selected)
 
@@ -230,6 +230,23 @@ Encrypt — no public deployment was made):
 | `https://localhost/` | HTTP/2 200 with `Strict-Transport-Security: max-age=31536000; includeSubDomains` |
 | Swagger UI path | served the web app (API docs are disabled by the `prod` profile) |
 | `e2e-smoke.sh https://localhost` (e-mail checks skipped) | first run 51/52: `/internal/…` returned the web app (200) instead of 404 — Caddy now answers 404 for `/internal/*`; second run **52/52** |
+
+## k6 load test (22 Oct 2026, `./scripts/load-test-k6.sh`)
+
+k6 1.1.0 in a container on the Docker network, through `gateway-lb` and both gateways; the gateways' per-IP rate
+limits were raised for the run and restored afterwards (verified: `GV_API_RATE_LIMIT=300` again).
+
+| Scenario | Result |
+|---|---|
+| browse — ramp to 20 virtual users, 55 s, search + quote, 0.2 s think time | 7 275 requests in total, 120.9 req/s, **0.00 % failed** |
+| search latency | avg 38.1 ms · median 17.6 ms · **p95 135.9 ms** · p99 364.5 ms · max 917.9 ms |
+| quote latency | avg 22.3 ms · median 10.6 ms · **p95 60.8 ms** · p99 259.0 ms · max 1 099.3 ms |
+| contention — 10 customers book the same room/nights at once | **1 accepted (201), 9 refused (409), 0 unexpected**; contended request avg 2.3 s (serialised on the room lock) |
+| thresholds | all passed |
+
+Raw output: [evidence/k6-output.txt](evidence/k6-output.txt), full metrics: [evidence/k6-summary.json](evidence/k6-summary.json).
+These numbers include think time and are not a throughput maximum; the earlier Node.js test without think time
+measured 1 119 req/s with one gateway.
 
 ## 7. Not tested / limitations of the evidence
 

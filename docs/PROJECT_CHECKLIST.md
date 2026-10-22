@@ -55,8 +55,13 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Security and quality (Phase 5, 22 Oct 2026)
 - [x] Request-DTO validation scan; fixed silent account disabling on empty status body
-- [x] JaCoCo: 86.6 % lines / 66.0 % branches aggregate, 196 backend tests; frontend 29 tests incl. axe on payment page
+- [x] JaCoCo: 86.4 % lines / 65.8 % branches aggregate, 196 backend tests; frontend 29 tests incl. axe on payment page
 - [x] Optional Prometheus + Grafana profile; payment page re-checked live at 375 px (no overflow)
+
+## Report, demo and polish (Phase 8, 22 Oct 2026)
+- [x] k6 load test (evidence/k6-output.txt), diagrams PNG, report/README/demo script/traceability updated
+- [ ] Student details, institutional pages and screenshots in the report (need the student)
+- [ ] GitHub repository + CI run + badge; Razorpay test keys; cloud account + domain (need the student)
 
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
@@ -73,7 +78,6 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [x] docs/api/API_REFERENCE.md · docs/database/DATABASE.md · docs/testing/TESTING.md (+ `evidence/`)
 - [x] docs/deployment/DEPLOYMENT.md · docs/deployment/OPERATIONS.md · docs/security/SECURITY.md
 - [x] docs/DEMO_SCRIPT.md · docs/TRACEABILITY_MATRIX.md · docs/project-report/PROJECT_REPORT.md
-- [ ] Report: student details, institutional pages and screenshots (placeholders marked `[to be completed]`)
 
 ## Not done / limitations
 - Razorpay not run against the real test API (needs keys) · cloud deployment (none performed) · CI workflow never run on GitHub ·

@@ -1,0 +1,18 @@
+sequenceDiagram
+  actor C as Customer
+  participant B as booking-service
+  participant R as room-service
+  participant P as payment-service
+  participant X as RabbitMQ
+  participant N as notification-service
+  C->>B: POST /bookings (Idempotency-Key)
+  B->>R: hold room (15 min, price)
+  B->>P: create payment
+  B->>X: booking.created (outbox)
+  C->>P: confirm payment (simulated / Razorpay)
+  P->>X: payment.succeeded (outbox)
+  X->>B: booking.payment-events
+  B->>R: confirm allocation
+  B->>X: booking.confirmed (outbox)
+  X->>N: notification.events
+  N->>N: e-mail once per event (confirmation, receipt)
