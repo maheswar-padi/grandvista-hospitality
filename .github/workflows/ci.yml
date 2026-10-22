@@ -4,9 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# Explicit bash runs steps with "-eo pipefail", so "cmd | tee log" still fails the step when cmd fails.
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -14,8 +20,9 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend build & tests
+    name: Backend build, tests & coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -23,20 +30,34 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      # Unit, slice, contract and Testcontainers-backed integration tests (Docker is available on the runner).
-      - name: Build and test all services
-        run: mvn -B -ntp verify
+      # Unit, slice, contract and Testcontainers integration tests (PostgreSQL, RabbitMQ, Mailpit run in Docker).
+      # Any failing test fails the job.
+      - name: Build and test all modules (with JaCoCo)
+        run: mvn -B -ntp clean verify
+      - name: Coverage summary
+        if: always()
+        run: ./scripts/coverage-summary.sh | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
-          path: '**/target/surefire-reports/*.xml'
+          name: backend-test-reports
+          path: |
+            **/target/surefire-reports/*.xml
+            **/target/surefire-reports/*.txt
+          if-no-files-found: ignore
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/target/site/jacoco-aggregate/
           if-no-files-found: ignore
 
   frontend:
     name: Frontend lint, tests & build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -53,18 +74,44 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  images:
-    name: Docker images & Compose validation
+  e2e:
+    name: Docker images, full stack & end-to-end smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Generate throw-away environment (random secrets, never published)
+      - name: Generate throw-away environment (random secrets, never printed or published)
         run: ./scripts/init-env.sh
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Build all images
         run: docker compose build
+      - name: Start the stack (2 Eureka, 2 gateways + load balancer, 2 booking replicas, RabbitMQ, Mailpit, 5 databases)
+        run: docker compose up -d --wait --wait-timeout 600
+      - name: End-to-end smoke test (incl. e-mail checks)
+        run: ./scripts/e2e-smoke.sh 2>&1 | tee e2e-smoke.log
+      - name: Database isolation check
+        run: ./scripts/verify-db-isolation.sh 2>&1 | tee db-isolation.log
+      - name: Collect container status and logs
+        if: always()
+        run: |
+          docker compose ps > compose-ps.log
+          docker compose logs --no-color --timestamps > compose.log
+      - name: Upload e2e logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: |
+            e2e-smoke.log
+            db-isolation.log
+            compose-ps.log
+            compose.log
+          if-no-files-found: ignore
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes
 
   dependency-audit:
     name: Dependency vulnerability audit (advisory)
@@ -87,7 +134,7 @@ jobs:
   deploy:
     name: Deploy (disabled until configured)
     runs-on: ubuntu-latest
-    needs: [images]
+    needs: [e2e]
     if: ${{ false }}
     steps:
-      - run: echo "Configure REGISTRY, credentials and a target platform before enabling this job."
+      - run: echo "Configure the target VM and secrets before enabling this job (see DEPLOYMENT.md)."

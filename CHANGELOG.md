@@ -5,6 +5,14 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Phase 6 — CI workflow (prepared; not yet run on GitHub)
+- **Changed:** `.github/workflows/ci.yml` — backend build + all tests with JaCoCo (coverage summary in the job
+  summary; surefire and coverage reports uploaded as artifacts), frontend lint/type check/tests/build, then an `e2e`
+  job that builds all images, starts the full HA stack, runs `e2e-smoke.sh` and `verify-db-isolation.sh`, and
+  uploads container logs. Maven and npm caches; steps run with `bash -eo pipefail`; any failing test fails the run.
+- **Pending:** a GitHub repository to push to (none configured; `gh` is not logged in). The CI status badge is added
+  once the repository URL is known.
+
 ### Phase 5 — Security and quality hardening
 - **Reviewed (already in place, re-verified by tests):** RS256 JWT at the gateway and in every service, roles
   CUSTOMER/STAFF/ADMIN (+ SERVICE), 15-min access tokens, rotating refresh tokens with reuse detection, RFC 9457
