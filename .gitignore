@@ -42,3 +42,6 @@ load-test-results/
 logs/
 *.log.*
 npm-debug.log*
+
+# Workspace transfer archives (not part of the project)
+.claude-transfer/
