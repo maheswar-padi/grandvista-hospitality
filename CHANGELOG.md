@@ -5,6 +5,17 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### CI on GitHub (23 Oct 2026)
+- **Changed:** repository published privately at `maheswar-padi/grandvista-hospitality`; commit author set to
+  PADI SESHA MAHESWARA RAO (GitHub no-reply e-mail) for this repository and rewritten on the unpublished history;
+  `.claude-transfer/` workspace archives (Maven cache and a source tarball, no credentials inside) removed from the
+  history and git-ignored — GitHub had rejected the first push because of their size.
+- **Added:** CI status badge in the README.
+- **Verified:** first GitHub Actions run [39832912584](https://github.com/maheswar-padi/grandvista-hospitality/actions/runs/39832912584)
+  green in ~15 min: backend 196 tests, 0 failures, coverage 85.9 % lines / 65.9 % branches; frontend 29 tests,
+  lint, type check, build; all images built; full stack on a clean runner with e2e 56/56 and DB isolation 40/40.
+- **Still pending:** Razorpay test-API run (skipped at the owner's request), cloud deployment.
+
 ### Phase 8 — Report, demo and final polish
 - **Added:** k6 load test (`load/k6/load-test.js`, `scripts/load-test-k6.sh`, which raises and restores the
   gateways' rate limits); architecture and event-flow diagrams as Mermaid source + PNG (`docs/diagrams/`);
@@ -31,8 +42,7 @@ Each entry lists only what was actually changed and verified.
   summary; surefire and coverage reports uploaded as artifacts), frontend lint/type check/tests/build, then an `e2e`
   job that builds all images, starts the full HA stack, runs `e2e-smoke.sh` and `verify-db-isolation.sh`, and
   uploads container logs. Maven and npm caches; steps run with `bash -eo pipefail`; any failing test fails the run.
-- **Pending:** a GitHub repository to push to (none configured; `gh` is not logged in). The CI status badge is added
-  once the repository URL is known.
+- **Pending at the time:** a GitHub repository — done on 23 Oct 2026 (see "CI on GitHub").
 
 ### Phase 5 — Security and quality hardening
 - **Reviewed (already in place, re-verified by tests):** RS256 JWT at the gateway and in every service, roles

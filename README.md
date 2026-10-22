@@ -4,8 +4,7 @@
 > GrandVista is a **fictional** hotel. Payments use a **simulated** provider (or Razorpay **test mode**) — no real
 > money is ever moved.
 
-<!-- CI badge: added once the repository is on GitHub and the workflow has run, e.g.
-[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml) -->
+[![CI](https://github.com/maheswar-padi/grandvista-hospitality/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/maheswar-padi/grandvista-hospitality/actions/workflows/ci.yml)
 
 A microservices hotel-booking platform: customers search live availability, see a transparent dynamic price,
 reserve a room (which is **held** for 15 minutes), pay, and receive an authoritative confirmation and e-mails.
@@ -125,6 +124,7 @@ Details (sequence diagrams, state machines, failure handling, deployment): [docs
 | Failover (kill gateway, Eureka, booking replica) | `./scripts/failover-demo.sh` | run A 99/100 requests + 4/4 bookings; run B 100/100 + 4/4 |
 | Load (k6, 20 virtual users) + contention | `./scripts/load-test-k6.sh` | search p95 135.9 ms, quote p95 60.8 ms, 0 % errors; 10 parallel bookings of one room → **1 accepted, 9 refused** |
 | Database isolation | `./scripts/verify-db-isolation.sh` | 40/40 |
+| **GitHub Actions CI** (all of the above except failover/load, on a clean runner) | push to `main` | **green** — [run 39832912584](https://github.com/maheswar-padi/grandvista-hospitality/actions/runs/39832912584): backend 196 tests, coverage 85.9 % lines; frontend 29 tests; full stack + e2e 56/56; DB isolation 40/40 |
 
 Details and raw outputs: [docs/testing/TESTING.md](docs/testing/TESTING.md), [docs/testing/evidence/](docs/testing/evidence/).
 
@@ -235,14 +235,12 @@ More (database, Eureka, routing, events, stuck holds, payments, migrations):
   available). Live keys are refused; no real money or card data is handled.
 * **Cloud:** **not deployed.** The production overlay (Caddy HTTPS) and deploy script were tested on the
   development machine only.
-* **CI:** the GitHub Actions workflow has **not run on GitHub** yet (no repository configured), so there is no badge.
 * **E-mail:** captured by a local Mailpit inbox; no real e-mail provider.
 * **Availability:** Eureka, gateways and booking-service run twice; auth, room, payment, notification, RabbitMQ and
   the databases run once (memory of the demonstration laptop). Rate limits are per gateway instance.
 * **Evidence limits:** performance figures come from one laptop; responsive checks used browser emulation.
 
-**Future work:** Razorpay test-API run and e2e in Razorpay mode · cloud deployment + CI on GitHub with continuous
-deployment · real e-mail/SMS provider · shared (Redis) rate limiting · replicas for the remaining services, RabbitMQ
+**Future work:** Razorpay test-API run and e2e in Razorpay mode · cloud deployment with continuous deployment from CI · real e-mail/SMS provider · shared (Redis) rate limiting · replicas for the remaining services, RabbitMQ
 quorum queues and PostgreSQL replication · OpenTelemetry tracing · room-type inventory and demand forecasting.
 
 Full status per requirement: [docs/TRACEABILITY_MATRIX.md](docs/TRACEABILITY_MATRIX.md).

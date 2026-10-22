@@ -133,5 +133,5 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
 | CSP allows inline styles (`style-src 'unsafe-inline'`, needed by the charting library) | Low | scripts remain same-origin only |
 | Uploaded images are stored as uploaded (metadata such as EXIF is not stripped) | Low | re-encode images in the media pipeline |
 | Razorpay integration not yet exercised against Razorpay's real test API | Medium | run the steps in DEPLOYMENT.md "Razorpay test mode" with test keys before relying on it |
-| Dependency scanning is advisory (`npm audit`, dependency review) and not yet run in CI | Medium | enable OWASP dependency-check / Dependabot after pushing to GitHub |
+| Dependency scanning is advisory: `npm audit --audit-level=high` runs in CI (passed in run 39832912584) but does not fail the build; no Java dependency scan | Medium | add OWASP dependency-check or Dependabot for Maven and make high findings blocking |
 | No TLS in local Compose | n/a locally | terminate HTTPS at the load balancer in any shared deployment |

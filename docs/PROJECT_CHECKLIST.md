@@ -61,7 +61,8 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 ## Report, demo and polish (Phase 8, 22 Oct 2026)
 - [x] k6 load test (evidence/k6-output.txt), diagrams PNG, report/README/demo script/traceability updated
 - [ ] Student details, institutional pages and screenshots in the report (need the student)
-- [ ] GitHub repository + CI run + badge; Razorpay test keys; cloud account + domain (need the student)
+- [x] GitHub repository (private) + CI green (run 39832912584) + badge
+- [ ] Razorpay test keys; cloud account + domain (need the student)
 
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST

@@ -232,5 +232,5 @@ release can be rolled back.
 `.github/workflows/ci.yml` builds and tests the backend (Testcontainers, JaCoCo), lints/tests/builds the frontend,
 builds all images, starts the full stack and runs the smoke test, and runs an advisory dependency audit. The
 `deploy` job is disabled; to enable continuous deployment to the VM, add the VM's SSH key and host as GitHub
-encrypted secrets and run `ssh … ./scripts/deploy.sh --pull` from that job. Status: the workflow has not yet run on
-GitHub (no repository configured).
+encrypted secrets and run `ssh … ./scripts/deploy.sh --pull` from that job. Status: first run on GitHub green on
+23 Oct 2026 ([run 39832912584](https://github.com/maheswar-padi/grandvista-hospitality/actions/runs/39832912584)).

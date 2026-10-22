@@ -409,6 +409,7 @@ inspection). Code coverage is measured with JaCoCo.
 | Contention (k6: 10 customers book the same room at once) | **1 accepted, 9 refused (409)**, 0 unexpected |
 | Consistency audit (earlier phase) | 10-way race → 1 booking; duplicate submissions → 1 booking; 5 concurrent payment confirmations → 1 authorisation |
 | Production overlay over HTTPS (local, `GV_DOMAIN=localhost`) | smoke test 52/52 (e-mail checks skipped) |
+| GitHub Actions CI on a clean runner (run 39832912584) | green: 196 backend tests, 85.9 % lines / 65.9 % branches, 29 frontend tests, e2e 56/56, isolation 40/40 |
 | Responsive inspection | 375, 390, 430, 768, 1024, 1440 px (Chromium emulation); payment page re-checked at 375 px after Phase 3 |
 
 An earlier load test with a Node.js script and no think time measured 1 119 req/s (search + quote, one gateway);
@@ -440,7 +441,10 @@ smoke-tests it on a single VM. The recommended free target is an Oracle Cloud Al
 The overlay was tested locally over HTTPS; **no cloud deployment was performed** (no cloud account was available).
 
 **CI.** A GitHub Actions workflow builds and tests the backend with coverage, checks the frontend, builds the images,
-starts the full stack and runs the smoke test. **It has not yet run on GitHub** (no repository was configured).
+starts the full stack and runs the smoke test. First run on GitHub (23 Oct 2026, private repository
+`maheswar-padi/grandvista-hospitality`, run 39832912584, commit 51bfc04): **all jobs green in about 15 minutes** —
+backend 196 tests with 0 failures and 85.9 % line / 65.9 % branch coverage, frontend 29 tests, all images built,
+the full stack started on a clean runner, end-to-end smoke test 56/56 and database isolation 40/40.
 
 ## 23. Security considerations
 
@@ -503,7 +507,7 @@ contains no fabricated images). The numbers match the capture guide in `docs/DEM
 * `[Screenshot 11: terminal output of scripts/failover-demo.sh (summary table)]`
 * `[Screenshot 12: Grafana "GrandVista — service overview" dashboard]`
 * `[Screenshot 13: Swagger UI at the gateway]`
-* `[Screenshot 14: GitHub Actions run with all jobs green and the README badge]` *(only after CI has run)*
+* `[Screenshot 14: GitHub Actions run with all jobs green and the README badge]`
 
 ## 26. Limitations and future work
 
@@ -512,7 +516,6 @@ contains no fabricated images). The numbers match the capture guide in `docs/DEM
 * **Payments:** the simulated provider is the default. The Razorpay test-mode gateway is implemented and tested
   against a fake Razorpay API but has **not** been run against Razorpay's real test API (no keys). No live payments.
 * **Cloud:** **not deployed**; the production overlay was tested only on the development machine.
-* **CI:** the workflow has **not** run on GitHub (no repository configured), so there is no CI badge yet.
 * **E-mail:** captured locally by Mailpit; no real e-mail provider.
 * **Availability:** Eureka, gateways and booking run twice; auth, room, payment, notification, RabbitMQ and each
   PostgreSQL server run once. Rate limits are per gateway instance (a client can reach twice the limit).
@@ -522,7 +525,7 @@ contains no fabricated images). The numbers match the capture guide in `docs/DEM
 **Future work:**
 
 1. Run the Razorpay flow against Razorpay's test API, then the e2e test in Razorpay mode.
-2. Deploy to the recommended VM and run the CI workflow on GitHub; add continuous deployment over SSH.
+2. Deploy to the recommended VM; add continuous deployment from CI over SSH.
 3. Real e-mail provider (SMTP relay or API) and SMS notifications; reminders before check-in.
 4. Redis-backed rate limiting shared by the gateways; replicas of the remaining services; RabbitMQ quorum queues;
    PostgreSQL replication and automated backups.
