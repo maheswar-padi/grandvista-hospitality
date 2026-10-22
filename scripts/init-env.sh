@@ -49,6 +49,7 @@ put GV_DEMO_CUSTOMER_EMAIL guest@grandvista.local
 put GV_DEMO_CUSTOMER_PASSWORD "Guest-$(rand 6)-7"
 put GV_DEMO_STAFF_EMAIL staff@grandvista.local
 put GV_DEMO_STAFF_PASSWORD "Staff-$(rand 6)-7"
+put GRAFANA_ADMIN_PASSWORD "$(rand 12)"
 put GV_PAYMENT_PROVIDER simulated
 put RAZORPAY_KEY_ID ""
 put RAZORPAY_KEY_SECRET ""

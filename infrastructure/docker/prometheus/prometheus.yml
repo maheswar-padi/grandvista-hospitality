@@ -1,0 +1,20 @@
+# Scrapes /actuator/prometheus of every service instance. Docker's DNS returns one address per container, so
+# replicas (e.g. both booking-service instances) are discovered automatically. Started with the
+# "observability" profile: docker compose --profile observability up -d
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: grandvista
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - { names: [auth-service], type: A, port: 8081, refresh_interval: 15s }
+      - { names: [room-service], type: A, port: 8082, refresh_interval: 15s }
+      - { names: [booking-service], type: A, port: 8083, refresh_interval: 15s }
+      - { names: [payment-service], type: A, port: 8084, refresh_interval: 15s }
+      - { names: [notification-service], type: A, port: 8085, refresh_interval: 15s }
+    relabel_configs:
+      # application label = the DNS name that discovered the target
+      - source_labels: [__meta_dns_name]
+        target_label: service

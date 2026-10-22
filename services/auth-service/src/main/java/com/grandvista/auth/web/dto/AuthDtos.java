@@ -56,7 +56,8 @@ public final class AuthDtos {
     public record UpdateRolesRequest(@NotEmpty Set<Role> roles) {
     }
 
-    public record UpdateStatusRequest(boolean enabled) {
+    /** {@code enabled} is required: a missing value must not silently disable an account. */
+    public record UpdateStatusRequest(@jakarta.validation.constraints.NotNull Boolean enabled) {
     }
 
     public record ServiceTokenResponse(

@@ -27,6 +27,7 @@
         <module>services/booking-service</module>
         <module>services/payment-service</module>
         <module>services/notification-service</module>
+        <module>coverage</module>
     </modules>
 
     <properties>
@@ -36,6 +37,9 @@
         <!-- Spring Cloud 2025.0.x ("Northfields") is the release train for Spring Boot 3.5.x -->
         <spring-cloud.version>2025.0.3</spring-cloud.version>
         <springdoc.version>2.8.17</springdoc.version>
+        <jacoco.version>0.8.13</jacoco.version>
+        <!-- set by jacoco:prepare-agent; empty default keeps surefire working when JaCoCo is skipped -->
+        <argLine></argLine>
     </properties>
 
     <dependencyManagement>
@@ -72,11 +76,34 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <configuration>
-                        <!-- Mockito inline mock maker needs a dynamic agent on JDK 21+ -->
-                        <argLine>-XX:+EnableDynamicAgentLoading -Xshare:off</argLine>
+                        <!-- @{argLine} carries the JaCoCo agent; Mockito's inline mock maker needs a dynamic agent on JDK 21+ -->
+                        <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Xshare:off</argLine>
                     </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Code coverage: target/site/jacoco/ per module (HTML, XML, CSV); summary: scripts/coverage-summary.sh -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>

@@ -228,6 +228,25 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void accountStatusChangeRequiresAnExplicitValueAndDisabledUsersCannotSignIn() throws Exception {
+        String adminToken = json.readTree(login("admin@example.test", "bootstrap-admin-pass-123").getResponse()
+                .getContentAsString()).get("accessToken").asText();
+        String email = uniqueEmail();
+        String userId = json.readTree(register(email, "correct-horse-42").getResponse().getContentAsString())
+                .get("user").get("id").asText();
+
+        mvc.perform(put("/api/v1/admin/users/{id}/status", userId).header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        assertThat(login(email, "correct-horse-42").getResponse().getStatus()).isEqualTo(200); // still enabled
+
+        mvc.perform(put("/api/v1/admin/users/{id}/status", userId).header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
+        assertThat(login(email, "correct-horse-42").getResponse().getStatus()).isEqualTo(403); // ACCOUNT_DISABLED
+    }
+
+    @Test
     void adminUserSearchWorksWithAndWithoutText() throws Exception {
         String adminToken = json.readTree(login("admin@example.test", "bootstrap-admin-pass-123").getResponse()
                 .getContentAsString()).get("accessToken").asText();

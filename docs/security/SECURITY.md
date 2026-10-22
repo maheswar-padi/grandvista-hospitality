@@ -71,7 +71,9 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
 
 ## 4. Input, output and data integrity
 
-* **Validation** with Bean Validation on every DTO and parameter; structured `VALIDATION_FAILED` errors.
+* **Validation** with Bean Validation on every DTO and parameter; structured `VALIDATION_FAILED` errors. A scan of all
+  request records (Phase 5) found one gap: `PUT /admin/users/{id}/status` took a primitive `boolean`, so an empty body
+  silently **disabled** the account — now `@NotNull Boolean` (test `accountStatusChangeRequiresAnExplicitValue…`).
 * **No mass assignment:** request DTOs list only writable fields; status, price, owner, roles and amounts are never
   taken from clients (extra JSON fields are ignored — tested by sending `amount` and `status` to the payment API).
 * **Server-authoritative money:** the hold prices the stay; the booking compares it with `expectedTotal`; the

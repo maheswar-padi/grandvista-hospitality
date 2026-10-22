@@ -172,8 +172,8 @@ Secrets are never committed. Profiles: default (development: demo data and Swagg
 
 | Suite | Command | Last verified result |
 |---|---|---|
-| Backend unit + integration + contract (Testcontainers PostgreSQL) | `mvn -B clean verify` | 148 tests, 0 failures, 0 errors, 0 skipped |
-| Frontend unit + component + accessibility | `npm --prefix frontend test` | 24 tests, 0 failures |
+| Backend unit + integration + contract (Testcontainers: PostgreSQL, RabbitMQ, Mailpit) | `mvn -B clean verify` | 196 tests, 0 failures, 0 errors, 0 skipped; coverage 86.6 % lines / 66.0 % branches (`./scripts/coverage-summary.sh`) |
+| Frontend unit + component + accessibility | `npm --prefix frontend test` | 29 tests, 0 failures |
 | Frontend lint / types / build | `npm --prefix frontend run lint && npm --prefix frontend run build` | passing |
 | End-to-end against the running stack | `./scripts/e2e-smoke.sh` | 52 checks passed |
 | Load / contention | `node scripts/load-test.mjs` | 1,119 req/s, 0 errors; 10 concurrent bookings → 1 accepted ([details](docs/testing/TESTING.md#load-test-measured-single-laptop-all-services-in-docker-limits-raised)) |
@@ -192,6 +192,7 @@ Details, coverage of scenarios and the exact verification log: [docs/testing/TES
 | PostgreSQL (one server per service) | auth 5433 · room 5434 · booking 5435 · payment 5436 · notification 5437 | loopback only, per-service credentials in `.env` |
 | RabbitMQ management UI | http://localhost:15672 | loopback only, `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` from `.env` |
 | Mailpit (captured e-mails) | http://localhost:8025 | loopback only; every e-mail the platform sends lands here |
+| Prometheus · Grafana (optional) | http://localhost:9090 · http://localhost:3001 | `docker compose --profile observability up -d`; Grafana user `admin`, password `GRAFANA_ADMIN_PASSWORD` in `.env` |
 | Services (internal network only) | auth 8081 · room 8082 · booking 8083 · payment 8084 · notification 8085 | not published to the host |
 
 ## Accounts

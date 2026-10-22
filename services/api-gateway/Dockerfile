@@ -14,6 +14,7 @@ COPY services/room-service/pom.xml services/room-service/
 COPY services/booking-service/pom.xml services/booking-service/
 COPY services/payment-service/pom.xml services/payment-service/
 COPY services/notification-service/pom.xml services/notification-service/
+COPY coverage/pom.xml coverage/
 COPY shared/platform-commons/src shared/platform-commons/src
 COPY services/api-gateway/src services/api-gateway/src
 RUN --mount=type=cache,target=/root/.m2 \

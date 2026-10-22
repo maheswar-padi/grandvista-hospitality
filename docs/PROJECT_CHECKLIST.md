@@ -53,6 +53,11 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [x] 2 Eureka peers, 2 gateways behind nginx (`gateway-lb`), 2 booking replicas, Resilience4j in gateway and booking
 - [x] `scripts/failover-demo.sh`: run A 99/100 requests + 4/4 bookings, run B 100/100 + 4/4 ([evidence](testing/evidence/failover-demo.txt))
 
+## Security and quality (Phase 5, 22 Oct 2026)
+- [x] Request-DTO validation scan; fixed silent account disabling on empty status body
+- [x] JaCoCo: 86.6 % lines / 66.0 % branches aggregate, 196 backend tests; frontend 29 tests incl. axe on payment page
+- [x] Optional Prometheus + Grafana profile; payment page re-checked live at 375 px (no overflow)
+
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
   exclusion-constraint deadlock (per-room row lock) · LocalDate JSON as arrays in load-balanced clients ·

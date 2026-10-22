@@ -481,4 +481,87 @@ class BookingSagaIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(body(null))).andExpect(status().isForbidden());
         assertThat(bookings.findById(id)).get().extracting(b -> b.getStatus()).isEqualTo(BookingStatus.PENDING_PAYMENT);
     }
+
+    // ---------- cancellation edge cases ----------
+
+    private UUID confirmedBooking(String key) throws Exception {
+        UUID id = UUID.fromString(createOk(key).get("id").asText());
+        when(rooms.confirm(id)).thenReturn(hold(id, "CONFIRMED", new BigDecimal("10584.00")));
+        event(id, "PAYMENT_SUCCEEDED", UUID.randomUUID()).andExpect(status().isOk());
+        return id;
+    }
+
+    private ResultActions cancel(UUID id, JwtRequestPostProcessor who) throws Exception {
+        return mvc.perform(post("/api/v1/bookings/{id}/cancel", id).with(who).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"plans changed\"}"));
+    }
+
+    private PaymentServiceClient.Refund refund(String status) {
+        return new PaymentServiceClient.Refund(UUID.randomUUID(), paymentId, new BigDecimal("10584.00"), status,
+                "FAILED".equals(status) ? "card network declined" : null);
+    }
+
+    @Test
+    void cancellingAnUnpaidBookingVoidsThePaymentThenReleasesTheRoom() throws Exception {
+        UUID id = UUID.fromString(createOk("key-cancel-unpaid-1").get("id").asText());
+        when(payments.cancel(eq(paymentId), any())).thenReturn(payment(new PaymentServiceClient.CreatePayment(id, "GV-X",
+                customerId, new BigDecimal("10584.00"), "INR", Instant.now()), "CANCELLED"));
+
+        cancel(id, customer(customerId)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+        verify(rooms).release(id, "CANCELLED_BEFORE_PAYMENT");
+        assertThat(dbStatus(id)).isEqualTo("CANCELLED");
+        verify(payments, never()).refund(any(), any());
+    }
+
+    @Test
+    void anUnpaidBookingWhosePaymentIsInProgressCannotBeCancelled() throws Exception {
+        UUID id = UUID.fromString(createOk("key-cancel-inprog-1").get("id").asText());
+        when(payments.cancel(eq(paymentId), any())).thenThrow(new DownstreamException("payment-service",
+                new RemoteProblem(409, "PAYMENT_IN_PROGRESS", "in progress", Map.of())));
+
+        cancel(id, customer(customerId)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAYMENT_IN_PROGRESS"));
+        assertThat(dbStatus(id)).isEqualTo("PENDING_PAYMENT");
+        verify(rooms, never()).release(eq(id), any());
+    }
+
+    @Test
+    void failedRefundNeedsAttentionAndAnAdministratorCanRetryIt() throws Exception {
+        UUID id = confirmedBooking("key-cancel-refund-fail-1");
+        when(payments.refund(eq(paymentId), any())).thenReturn(refund("FAILED"));
+
+        cancel(id, customer(customerId)).andExpect(status().isOk());
+        assertThat(dbStatus(id)).isEqualTo("NEEDS_ATTENTION");
+
+        mvc.perform(post("/api/v1/admin/bookings/{id}/retry-compensation", id).with(personnel("STAFF")))
+                .andExpect(status().isForbidden());
+        when(payments.refund(eq(paymentId), any())).thenReturn(refund("SUCCEEDED"));
+        mvc.perform(post("/api/v1/admin/bookings/{id}/retry-compensation", id).with(personnel("ADMIN")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+        mvc.perform(post("/api/v1/admin/bookings/{id}/retry-compensation", id).with(personnel("ADMIN")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NOT_NEEDING_ATTENTION"));
+        // the same refund key is used on every attempt, so the payment-service can never refund twice
+        verify(payments, times(2)).refund(eq(paymentId), org.mockito.ArgumentMatchers.argThat(
+                r -> r.idempotencyKey().equals("refund-" + id)));
+    }
+
+    @Test
+    void pendingRefundKeepsTheCancellationOpenUntilTheRefundSucceeds() throws Exception {
+        UUID id = confirmedBooking("key-cancel-refund-pending-1");
+        when(payments.refund(eq(paymentId), any())).thenReturn(refund("PENDING"));
+        cancel(id, customer(customerId)).andExpect(status().isAccepted()); // 202: refund still in progress
+        assertThat(dbStatus(id)).isEqualTo("CANCELLATION_PENDING");
+
+        when(payments.refund(eq(paymentId), any())).thenReturn(refund("SUCCEEDED"));
+        cancel(id, customer(customerId)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    void hotelInitiatedCancellationRefundsInFull() throws Exception {
+        UUID id = confirmedBooking("key-cancel-hotel-1");
+        when(payments.refund(eq(paymentId), any())).thenReturn(refund("SUCCEEDED"));
+        cancel(id, personnel("STAFF")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+        assertThat(jdbc.queryForObject("SELECT refund_amount FROM bookings WHERE id = ?", BigDecimal.class, id))
+                .isEqualByComparingTo("10584.00");
+    }
 }

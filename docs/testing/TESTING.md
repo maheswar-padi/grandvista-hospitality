@@ -45,9 +45,19 @@ node scripts/load-test.mjs --vus 20 --duration 30 --contenders 10
 ```
 Start the gateway with `GV_API_RATE_LIMIT=1000000 GV_AUTH_RATE_LIMIT=1000` for a throughput run.
 
-## 3. Backend results — `mvn -B clean verify` (22 Oct 2026, after Phase 2): **165 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
+## 3. Backend results — `mvn -B clean verify` (22 Oct 2026, after Phase 5): **196 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
 
-The baseline (before Phases 1–2) was 148 tests. New classes are marked *(new)*.
+The baseline (before Phases 1–5) was 148 tests. New classes are marked *(new)*. Per-module totals in the
+Phase 5 run: platform-commons 4, discovery 2, gateway 22, auth 19, room 34, booking 55, payment 52,
+notification 8. (The table below lists classes; counts of classes changed in Phases 4–5 are in CHANGELOG.md.)
+
+### Code coverage (JaCoCo, same run)
+
+Aggregate report over all modules (`coverage/target/site/jacoco-aggregate/index.html`, summary by
+`./scripts/coverage-summary.sh`): **86.6 % of lines (3,877 of 4,479), 66.0 % of branches (955 of 1,447)**.
+Per module (own tests only): gateway 93.2 %, auth 90.7 %, booking 85.6 %, room 85.4 %, payment 86.1 %,
+notification 94.1 %, discovery 83.3 % lines. Coverage measures the automated test suite only; the live e2e,
+failover and load tests are not included in it.
 
 | Module | Test class | Tests |
 |---|---|---|

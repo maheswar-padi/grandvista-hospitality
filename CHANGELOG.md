@@ -5,6 +5,22 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Phase 5 — Security and quality hardening
+- **Reviewed (already in place, re-verified by tests):** RS256 JWT at the gateway and in every service, roles
+  CUSTOMER/STAFF/ADMIN (+ SERVICE), 15-min access tokens, rotating refresh tokens with reuse detection, RFC 9457
+  (successor of RFC 7807) problem responses, CORS allow-list, per-IP rate limits, no stack traces, correlation IDs
+  through gateway, services and RabbitMQ.
+- **Fixed:** `PUT /api/v1/admin/users/{id}/status` with an empty body disabled the account (primitive `boolean`
+  defaulted to false); the field is now required (400 `VALIDATION_FAILED`).
+- **Added:** JaCoCo per module and an aggregate `coverage` module, `scripts/coverage-summary.sh`; new tests for
+  catalogue administration and the demo seeder (room), cancellation edge cases — unpaid cancel, payment in
+  progress, failed/pending refunds, admin retry, hotel-initiated full refund (booking), the gateway error handler
+  (10 cases) and account status validation (auth); axe checks for the payment page in both provider modes.
+- **Added:** optional `observability` Compose profile — Prometheus 3.5 (scrapes every instance via Docker DNS) and
+  Grafana 12.1 with a provisioned "GrandVista — service overview" dashboard.
+- **Verified:** backend 196 tests, 0 failures, coverage 86.6 % lines / 66.0 % branches (aggregate); frontend 29
+  tests, lint, type check, build; payment page at 375 px without overflow (live); Prometheus 6/6 targets up.
+
 ### Phase 4 — High availability and resilience
 - **Added:** two Eureka servers replicating to each other (`EUREKA_PEER_URL`; clients list both); two API gateways
   behind a new nginx load balancer `gateway-lb` (public port 8080; the frontend's nginx also balances both);

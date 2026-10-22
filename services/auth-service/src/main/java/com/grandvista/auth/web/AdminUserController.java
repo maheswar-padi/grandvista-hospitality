@@ -64,7 +64,7 @@ public class AdminUserController {
 
     @Operation(summary = "Enable or disable a user (ADMIN)")
     @PutMapping("/{userId}/status")
-    public UserResponse updateStatus(@PathVariable UUID userId, @RequestBody UpdateStatusRequest request,
+    public UserResponse updateStatus(@PathVariable UUID userId, @jakarta.validation.Valid @RequestBody UpdateStatusRequest request,
             Authentication authentication) {
         UUID actor = AuthenticatedUser.from(authentication).requireUserId();
         return UserResponse.from(accounts.updateEnabled(actor, userId, request.enabled()));

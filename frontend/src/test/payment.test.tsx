@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PaymentPage from '../pages/PaymentPage';
 import { booking, payment } from './fixtures';
-import { customerSession, mockApi, renderRoutes } from './utils';
+import { customerSession, mockApi, renderRoutes, seriousA11yViolations } from './utils';
 
 const routes = [
   { path: '/bookings/:bookingId/pay', element: <PaymentPage /> },
@@ -91,5 +91,17 @@ describe('payment page', () => {
     expect(await screen.findByText(/payment window was closed/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: /with Razorpay/ })).toBeEnabled());
     expect(calls.some((c) => c.path === '/api/v1/payments/p-1/confirm')).toBe(false);
+  });
+
+  it.each(['SIMULATED', 'RAZORPAY'] as const)('has no serious accessibility violations (%s mode)', async (provider) => {
+    mockApi({
+      ...customerSession(),
+      'GET /api/v1/bookings/b-1': () => ({ body: booking('PENDING_PAYMENT') }),
+      'POST /api/v1/payments/p-1/checkout': () => ({ body: session(provider) }),
+      'GET /api/v1/payments/test-methods': () => ({ body: [{ token: 'sim_card_success', label: 'Simulated Visa – approved', expectedOutcome: 'SUCCEEDED' }] }),
+    });
+    const { container } = renderRoutes(routes, '/bookings/b-1/pay');
+    await screen.findByRole('button', { name: /Pay/ });
+    expect(await seriousA11yViolations(container)).toEqual([]);
   });
 });
