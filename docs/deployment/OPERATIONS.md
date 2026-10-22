@@ -20,7 +20,7 @@ docker compose logs --no-log-prefix | grep "cid=<correlation-id>"
 Database shell for a service (credentials come from `.env`; nothing is printed):
 
 ```bash
-set -a; . ./.env; set +a; PGPASSWORD=$BOOKING_DB_PASSWORD psql -h localhost -p 5433 -U grandvista_booking grandvista_booking
+set -a; . ./.env; set +a; PGPASSWORD=$BOOKING_DB_PASSWORD psql -h localhost -p 5435 -U grandvista_booking grandvista_booking
 ```
 
 ## Diagnosis guide
@@ -107,5 +107,5 @@ new hold on the same dates also expires stale holds first, so a stuck hold never
 | Create staff | an administrator grants `STAFF` in *Users & roles* |
 | Take a room out of service | *Rooms & inventory → Status* (staff or admin); upcoming confirmed stays are kept and reported |
 | Change prices | *Pricing → Edit as new version*; existing bookings keep their price snapshot |
-| Back up | `docker exec grandvista-hospitality-postgres-1 pg_dumpall -U grandvista_admin > backup.sql` (contains personal data — store securely) |
+| Back up | one dump per service database, e.g. `docker compose exec -T booking-db pg_dump -U grandvista_booking grandvista_booking > booking.sql` (contains personal data — store securely) |
 | Rotate secrets | update `.env` (or the secret store), then restart the affected services; database passwords also need `ALTER ROLE … PASSWORD` |

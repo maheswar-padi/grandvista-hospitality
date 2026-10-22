@@ -63,6 +63,12 @@ gv:
       email: ${GV_BOOTSTRAP_ADMIN_EMAIL:}
       password: ${GV_BOOTSTRAP_ADMIN_PASSWORD:}
       full-name: ${GV_BOOTSTRAP_ADMIN_NAME:Platform Administrator}
+    demo-users:
+      enabled: ${GV_DEMO_SEED_ENABLED:false}
+      customer-email: ${GV_DEMO_CUSTOMER_EMAIL:guest@grandvista.local}
+      customer-password: ${GV_DEMO_CUSTOMER_PASSWORD:}
+      staff-email: ${GV_DEMO_STAFF_EMAIL:staff@grandvista.local}
+      staff-password: ${GV_DEMO_STAFF_PASSWORD:}
     service-clients:
       - client-id: booking-service
         client-secret: ${BOOKING_SERVICE_CLIENT_SECRET:}
@@ -117,6 +123,8 @@ gv:
   auth:
     keys:
       allow-ephemeral: false
+    demo-users:
+      enabled: false
 springdoc:
   api-docs:
     enabled: false

@@ -212,7 +212,9 @@ Detailed diagrams (context, sequence, state machines, deployment) are in `docs/a
 
 ## 13. Database design
 
-Each service owns a separate database; cross-service references are identifiers only. Key constraints:
+Each service owns a separate database on **its own PostgreSQL server** (one container, volume and set of credentials
+per service; the service's non-superuser role does not exist on the other servers — verified by
+`scripts/verify-db-isolation.sh`, 28/28 checks). Cross-service references are identifiers only. Key constraints:
 
 * `inventory_allocations`: `EXCLUDE USING gist (room_id WITH =, stay_range WITH &&) WHERE status IN ('HELD','CONFIRMED')`
   where `stay_range = daterange(check_in, check_out, '[)')`; unique `booking_id`.
@@ -365,7 +367,8 @@ Complete results and commands: `docs/testing/TESTING.md`; raw outputs: `docs/tes
 
 ## 22. Deployment architecture
 
-Seven Docker images (multi-stage builds, non-root runtime users, health checks) and PostgreSQL run in one Compose
+Seven Docker images (multi-stage builds, non-root runtime users, health checks) and four PostgreSQL servers (one per
+service) run in one Compose
 project on a private network. Only the web application (port 3000) and the gateway (8080) are published; Eureka and
 PostgreSQL are bound to the loopback interface. Secrets come from a generated, git-ignored `.env` file and a
 generated RSA key pair mounted read-only. A cloud deployment path (managed containers, managed PostgreSQL, secret
@@ -428,7 +431,6 @@ must not contain fabricated images):
 * The system has not been deployed to a cloud platform; the CI workflow has not been executed on GitHub.
 * Gateway rate limiting is in memory (single gateway instance); Eureka and the gateway were not run in multiple
   instances.
-* One PostgreSQL server hosts the four service databases (logical, not physical, isolation).
 * No e-mail notifications; no multi-property or multi-currency support.
 * Performance figures come from a single laptop and are not production capacity estimates.
 * Responsive testing used browser emulation, not physical devices.

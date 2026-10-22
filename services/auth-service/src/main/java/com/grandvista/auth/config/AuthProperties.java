@@ -13,6 +13,7 @@ public record AuthProperties(
         Cookie cookie,
         Lockout lockout,
         BootstrapAdmin bootstrapAdmin,
+        DemoUsers demoUsers,
         List<ServiceClient> serviceClients) {
 
     public AuthProperties {
@@ -23,6 +24,7 @@ public record AuthProperties(
         cookie = cookie == null ? new Cookie(null, true, null) : cookie;
         lockout = lockout == null ? new Lockout(5, Duration.ofMinutes(15)) : lockout;
         bootstrapAdmin = bootstrapAdmin == null ? new BootstrapAdmin(null, null, null) : bootstrapAdmin;
+        demoUsers = demoUsers == null ? new DemoUsers(false, null, null, null, null) : demoUsers;
         serviceClients = serviceClients == null ? List.of() : serviceClients;
     }
 
@@ -53,6 +55,19 @@ public record AuthProperties(
         @Override
         public String toString() {
             return "BootstrapAdmin[email=" + email + ", password=***]";
+        }
+    }
+
+    /**
+     * Optional demonstration accounts (one customer, one staff member) created at start-up when enabled and
+     * not yet present. Passwords come only from the environment; the production profile disables this.
+     */
+    public record DemoUsers(boolean enabled, String customerEmail, String customerPassword, String staffEmail,
+                            String staffPassword) {
+        @Override
+        public String toString() {
+            return "DemoUsers[enabled=" + enabled + ", customerEmail=" + customerEmail + ", staffEmail=" + staffEmail
+                    + ", passwords=***]";
         }
     }
 

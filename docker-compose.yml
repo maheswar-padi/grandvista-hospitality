@@ -21,33 +21,76 @@ x-eureka-env: &eureka-env
   API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
 
+x-postgres-env: &postgres-env
+  # Container superuser: used only by the init script to create the service's own non-superuser role.
+  POSTGRES_USER: ${POSTGRES_ADMIN_USER:-grandvista_admin}
+  POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?run ./scripts/init-env.sh first}
+  POSTGRES_DB: postgres
+
+x-postgres-service: &postgres-service
+  image: postgres:16-alpine
+  restart: unless-stopped
+  networks: [grandvista]
+  # Ports are bound to loopback only, for local tools (psql, IDE).
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $${SERVICE_USER} -d $${SERVICE_DB} -h 127.0.0.1"]
+    interval: 5s
+    timeout: 5s
+    retries: 20
+  deploy:
+    resources:
+      limits:
+        memory: 192m
+
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    networks: [grandvista]
+  # ---- Database per service: four independent PostgreSQL servers, each with its own credentials and volume ----
+  auth-db:
+    <<: *postgres-service
     environment:
-      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-grandvista_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?run ./scripts/init-env.sh first}
-      POSTGRES_DB: postgres
-      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?missing}
-      ROOM_DB_PASSWORD: ${ROOM_DB_PASSWORD:?missing}
-      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:?missing}
-      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?missing}
+      <<: *postgres-env
+      SERVICE_DB: grandvista_auth
+      SERVICE_USER: grandvista_auth
+      SERVICE_PASSWORD: ${AUTH_DB_PASSWORD:?missing}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - auth-db-data:/var/lib/postgresql/data
       - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
-    # Bound to loopback only, for local tools (psql, IDE). Remove the mapping to keep it fully private.
-    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    deploy:
-      resources:
-        limits:
-          memory: 384m
+    ports: ["127.0.0.1:${AUTH_DB_HOST_PORT:-5433}:5432"]
+
+  room-db:
+    <<: *postgres-service
+    environment:
+      <<: *postgres-env
+      SERVICE_DB: grandvista_room
+      SERVICE_USER: grandvista_room
+      SERVICE_PASSWORD: ${ROOM_DB_PASSWORD:?missing}
+    volumes:
+      - room-db-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${ROOM_DB_HOST_PORT:-5434}:5432"]
+
+  booking-db:
+    <<: *postgres-service
+    environment:
+      <<: *postgres-env
+      SERVICE_DB: grandvista_booking
+      SERVICE_USER: grandvista_booking
+      SERVICE_PASSWORD: ${BOOKING_DB_PASSWORD:?missing}
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${BOOKING_DB_HOST_PORT:-5435}:5432"]
+
+  payment-db:
+    <<: *postgres-service
+    environment:
+      <<: *postgres-env
+      SERVICE_DB: grandvista_payment
+      SERVICE_USER: grandvista_payment
+      SERVICE_PASSWORD: ${PAYMENT_DB_PASSWORD:?missing}
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${PAYMENT_DB_HOST_PORT:-5436}:5432"]
 
   discovery-server:
     <<: *java-service
@@ -67,11 +110,11 @@ services:
     build: { context: ., dockerfile: services/auth-service/Dockerfile }
     image: grandvista/auth-service:1.0.0
     depends_on:
-      postgres: { condition: service_healthy }
+      auth-db: { condition: service_healthy }
       discovery-server: { condition: service_healthy }
     environment:
       <<: *eureka-env
-      DB_URL: jdbc:postgresql://postgres:5432/grandvista_auth
+      DB_URL: jdbc:postgresql://auth-db:5432/grandvista_auth
       DB_USERNAME: grandvista_auth
       DB_PASSWORD: ${AUTH_DB_PASSWORD}
       GV_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
@@ -80,6 +123,11 @@ services:
       GV_COOKIE_SECURE: ${GV_COOKIE_SECURE:-true}
       GV_BOOTSTRAP_ADMIN_EMAIL: ${GV_BOOTSTRAP_ADMIN_EMAIL:-}
       GV_BOOTSTRAP_ADMIN_PASSWORD: ${GV_BOOTSTRAP_ADMIN_PASSWORD:-}
+      GV_DEMO_SEED_ENABLED: ${GV_DEMO_SEED_ENABLED:-true}
+      GV_DEMO_CUSTOMER_EMAIL: ${GV_DEMO_CUSTOMER_EMAIL:-guest@grandvista.local}
+      GV_DEMO_CUSTOMER_PASSWORD: ${GV_DEMO_CUSTOMER_PASSWORD:-}
+      GV_DEMO_STAFF_EMAIL: ${GV_DEMO_STAFF_EMAIL:-staff@grandvista.local}
+      GV_DEMO_STAFF_PASSWORD: ${GV_DEMO_STAFF_PASSWORD:-}
       BOOKING_SERVICE_CLIENT_SECRET: ${BOOKING_SERVICE_CLIENT_SECRET:?missing}
       PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET:?missing}
     volumes:
@@ -91,12 +139,12 @@ services:
     build: { context: ., dockerfile: services/room-service/Dockerfile }
     image: grandvista/room-service:1.0.0
     depends_on:
-      postgres: { condition: service_healthy }
+      room-db: { condition: service_healthy }
       discovery-server: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
       <<: *eureka-env
-      DB_URL: jdbc:postgresql://postgres:5432/grandvista_room
+      DB_URL: jdbc:postgresql://room-db:5432/grandvista_room
       DB_USERNAME: grandvista_room
       DB_PASSWORD: ${ROOM_DB_PASSWORD}
       GV_MEDIA_ROOT: /app/var/media
@@ -110,12 +158,12 @@ services:
     build: { context: ., dockerfile: services/payment-service/Dockerfile }
     image: grandvista/payment-service:1.0.0
     depends_on:
-      postgres: { condition: service_healthy }
+      payment-db: { condition: service_healthy }
       discovery-server: { condition: service_healthy }
       auth-service: { condition: service_healthy }
     environment:
       <<: *eureka-env
-      DB_URL: jdbc:postgresql://postgres:5432/grandvista_payment
+      DB_URL: jdbc:postgresql://payment-db:5432/grandvista_payment
       DB_USERNAME: grandvista_payment
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
       PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET}
@@ -127,14 +175,14 @@ services:
     build: { context: ., dockerfile: services/booking-service/Dockerfile }
     image: grandvista/booking-service:1.0.0
     depends_on:
-      postgres: { condition: service_healthy }
+      booking-db: { condition: service_healthy }
       discovery-server: { condition: service_healthy }
       auth-service: { condition: service_healthy }
       room-service: { condition: service_healthy }
       payment-service: { condition: service_healthy }
     environment:
       <<: *eureka-env
-      DB_URL: jdbc:postgresql://postgres:5432/grandvista_booking
+      DB_URL: jdbc:postgresql://booking-db:5432/grandvista_booking
       DB_USERNAME: grandvista_booking
       DB_PASSWORD: ${BOOKING_DB_PASSWORD}
       BOOKING_SERVICE_CLIENT_SECRET: ${BOOKING_SERVICE_CLIENT_SECRET}
@@ -172,7 +220,13 @@ networks:
     name: grandvista
 
 volumes:
-  postgres-data:
-    name: grandvista-postgres-data
+  auth-db-data:
+    name: grandvista-auth-db-data
+  room-db-data:
+    name: grandvista-room-db-data
+  booking-db-data:
+    name: grandvista-booking-db-data
+  payment-db-data:
+    name: grandvista-payment-db-data
   room-media:
     name: grandvista-room-media

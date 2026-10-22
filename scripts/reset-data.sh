@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "This will stop GrandVista and permanently delete:"
-echo "  - volume grandvista-postgres-data  (all users, rooms, bookings, payments)"
+echo "  - volumes grandvista-{auth,room,booking,payment}-db-data  (all users, rooms, bookings, payments)"
 echo "  - volume grandvista-room-media     (uploaded room photographs)"
 if [[ "${1:-}" != "--yes" ]]; then
   read -r -p "Type DELETE to continue: " answer

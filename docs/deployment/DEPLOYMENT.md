@@ -56,14 +56,15 @@ Every service should show `(healthy)` after about a minute. Then:
 | Stop (keep data) | `docker compose down` |
 | Delete all data (asks for confirmation) | `./scripts/reset-data.sh` |
 
-Published ports: 3000 (web app), 8080 (gateway), and on 127.0.0.1 only 8761 (Eureka) and 5433 (PostgreSQL).
+Published ports: 3000 (web app), 8080 (gateway), and on 127.0.0.1 only 8761 (Eureka) and 5433–5436
+(the auth, room, booking and payment PostgreSQL servers).
 Services and the database are otherwise reachable only on the internal `grandvista` network.
 
 ### Volumes
 
 | Volume | Contents | Removed by |
 |---|---|---|
-| `grandvista-postgres-data` | the four databases | `./scripts/reset-data.sh` only |
+| `grandvista-{auth,room,booking,payment}-db-data` | one PostgreSQL server per service | `./scripts/reset-data.sh` only |
 | `grandvista-room-media` | uploaded and seeded room images | `./scripts/reset-data.sh` only |
 
 ## Configuration
@@ -102,7 +103,7 @@ set -a; . ./.env; set +a
 DB_PASSWORD=$ROOM_DB_PASSWORD EUREKA_URL=http://$EUREKA_USERNAME:$EUREKA_PASSWORD@localhost:8761/eureka GV_JWKS_URI=http://localhost:8081/oauth2/jwks mvn -pl services/room-service -am spring-boot:run
 ```
 
-Each service's `application.yml` defaults to `localhost` URLs: database `localhost:5433/grandvista_<svc>` with user
+Each service's `application.yml` defaults to `localhost` URLs: database `localhost:<5433|5434|5435|5436>/grandvista_<svc>` (auth, room, booking, payment) with user
 `grandvista_<svc>`, Eureka `localhost:8761`, JWKS `localhost:8081`. Services started on the host register with
 their host address, so mixing host and container instances of the same service is not recommended. Note that the
 auth-service is not published to the host in Compose; when running a resource service on the host, run the
@@ -121,7 +122,7 @@ stops the service (visible in `docker compose logs <svc>`). Add a new `V<n>__des
 applied one. Check the state:
 
 ```bash
-set -a; . ./.env; set +a; PGPASSWORD=$BOOKING_DB_PASSWORD psql -h localhost -p 5433 -U grandvista_booking grandvista_booking -c 'select version, description, success from flyway_schema_history'
+set -a; . ./.env; set +a; PGPASSWORD=$BOOKING_DB_PASSWORD psql -h localhost -p 5435 -U grandvista_booking grandvista_booking -c 'select version, description, success from flyway_schema_history'
 ```
 
 ## Cloud deployment

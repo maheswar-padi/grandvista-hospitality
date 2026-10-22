@@ -20,7 +20,7 @@ flowchart TB
   api <-->|charges, refunds,<br/>signed webhooks| provider
 ```
 
-The platform has no external dependencies at runtime other than its own PostgreSQL server. The payment
+The platform has no external dependencies at runtime other than its own PostgreSQL servers (one per service). The payment
 provider is simulated inside the payment-service (clearly separated in its own schema and package) so the
 complete workflow — including asynchronous webhooks and lost responses — can be demonstrated without
 credentials or real money.

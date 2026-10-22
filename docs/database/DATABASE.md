@@ -1,9 +1,10 @@
 # Database design
 
-One PostgreSQL 16 server hosts **four databases, one per service**, each owned by its own login role
-(`grandvista_auth`, `grandvista_room`, `grandvista_booking`, `grandvista_payment`) created by
-`infrastructure/docker/postgres/init/01-create-service-databases.sh`. A service's credentials can't read another
-service's database, so there are **no cross-service foreign keys**: references across services are plain UUID
+Each service has **its own PostgreSQL 16 server** (container `auth-db`, `room-db`, `booking-db`, `payment-db`) with
+its own volume, credentials and health check. On first start `infrastructure/docker/postgres/init/01-create-service-db.sh`
+creates the service's database and a non-superuser owner role (`grandvista_auth`, `grandvista_room`,
+`grandvista_booking`, `grandvista_payment`); the container's superuser is used only for that step. A service's role
+does not exist on any other server (checked by `./scripts/verify-db-isolation.sh`, 28 checks), so there are **no cross-service foreign keys**: references across services are plain UUID
 columns, and the copies a service keeps (e.g. room name on a booking) are deliberate snapshots.
 
 The schema is created only by **Flyway migrations** (`services/<svc>/src/main/resources/db/migration`); Hibernate
@@ -358,5 +359,6 @@ a migration — they come from `DemoDataSeeder` (only when `GV_DEMO_SEED_ENABLED
 To inspect a database locally:
 
 ```bash
-set -a; . ./.env; set +a; PGPASSWORD=$ROOM_DB_PASSWORD psql -h localhost -p 5433 -U grandvista_room grandvista_room
+set -a; . ./.env; set +a; PGPASSWORD=$ROOM_DB_PASSWORD psql -h localhost -p 5434 -U grandvista_room grandvista_room
+# host ports: auth 5433 · room 5434 · booking 5435 · payment 5436 (127.0.0.1 only)
 ```

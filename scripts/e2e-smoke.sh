@@ -57,6 +57,21 @@ poll_status() { # poll_status <bookingId> <token> <wanted> [seconds]
 }
 
 section "0. Platform health"
+# Containers report healthy before Eureka has propagated every instance to the gateway (up to ~30 s after a
+# fresh start). Wait until each public route is served, so the checks below test behaviour, not start-up timing.
+wait_ready() {
+  local deadline=$((SECONDS + ${READY_TIMEOUT:-180})) path code
+  # The per-service API-docs routes are public and reach each service through Eureka.
+  for path in auth-service room-service booking-service payment-service; do
+    while :; do
+      code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api-docs/$path")
+      [[ "$code" != "503" && "$code" != "000" && "$code" != "502" && "$code" != "504" ]] && break
+      (( SECONDS > deadline )) && { red "  services not routable after ${READY_TIMEOUT:-180}s ($path → $code)"; break; }
+      sleep 2
+    done
+  done
+}
+wait_ready
 check "gateway is healthy" "UP" "$(curl -s "$BASE/actuator/health" | jq -r .status)"
 check "unknown internal path is not exposed" "404" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/internal/v1/holds")"
 

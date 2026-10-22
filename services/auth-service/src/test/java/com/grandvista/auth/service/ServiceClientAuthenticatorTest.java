@@ -15,7 +15,7 @@ class ServiceClientAuthenticatorTest {
     private static final String SECRET = "s".repeat(40);
 
     private final ServiceClientAuthenticator authenticator = new ServiceClientAuthenticator(new AuthProperties(
-            null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null,
             List.of(new AuthProperties.ServiceClient("booking-service", SECRET),
                     new AuthProperties.ServiceClient("weak-client", "too-short"))));
 

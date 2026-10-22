@@ -56,7 +56,8 @@ flowchart LR
   payment --- db4[(payment DB)]
 ```
 
-Each service owns its database (one PostgreSQL server, four databases, four owner roles). Detailed diagrams
+Each service owns its database: four separate PostgreSQL containers, each with its own credentials, volume and
+health check (verified by `./scripts/verify-db-isolation.sh`). Detailed diagrams
 (context, sequence, payment workflow, state machines, deployment) are in
 [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
@@ -187,7 +188,7 @@ Details, coverage of scenarios and the exact verification log: [docs/testing/TES
 | API gateway | http://localhost:8080/api/v1 | the only public API entry point |
 | Swagger UI (all services) | http://localhost:8080/swagger-ui.html | development only (`API_DOCS_ENABLED`) |
 | Eureka dashboard | http://localhost:8761 | loopback only, HTTP Basic (`EUREKA_USERNAME`/`EUREKA_PASSWORD` from `.env`) |
-| PostgreSQL | localhost:5433 | loopback only, per-service credentials in `.env` |
+| PostgreSQL (one server per service) | auth 5433 · room 5434 · booking 5435 · payment 5436 | loopback only, per-service credentials in `.env` |
 | Services (internal network only) | auth 8081 · room 8082 · booking 8083 · payment 8084 | not published to the host |
 
 ## Accounts
@@ -196,6 +197,9 @@ Details, coverage of scenarios and the exact verification log: [docs/testing/TES
 * **Administrator:** created once at start-up from `GV_BOOTSTRAP_ADMIN_EMAIL` / `GV_BOOTSTRAP_ADMIN_PASSWORD`
   (generated into `.env` by `init-env.sh` — read it there; it is never logged). It is only created when no
   administrator exists. There is no API or UI that lets an anonymous user create an administrator.
+* **Demo accounts** (created when `GV_DEMO_SEED_ENABLED=true`): customer `guest@grandvista.local` and staff
+  `staff@grandvista.local`; their passwords are generated into `.env` (`GV_DEMO_CUSTOMER_PASSWORD`,
+  `GV_DEMO_STAFF_PASSWORD`). Disabled by the `prod` profile.
 * **Staff:** an administrator grants the `STAFF` role under *Administration → Users & roles*.
 * **Demo data:** 11 fictional rooms across 5 types are seeded on first start when `GV_DEMO_SEED_ENABLED=true`.
   Room images are labelled illustrations, not photographs.
@@ -234,7 +238,6 @@ More (database, Eureka, routing, stuck holds, payments, migrations):
 * The payment provider is **simulated**; integrating a real provider means implementing `PaymentProvider`
   (and its webhook signature scheme). No real money or card data is ever handled.
 * Gateway rate limiting is in-memory (correct for one gateway instance; use Redis-backed limiting for several).
-* Single PostgreSQL server hosting four databases (logical isolation); production would use separate instances.
 * No e-mail notifications and no message broker (payment events use an HTTP outbox relay).
 * No cloud deployment has been performed (a deployment path is documented); the CI workflow has not been run on GitHub.
 * Gateway and Eureka were run as single instances; multi-instance was verified for room-service only.

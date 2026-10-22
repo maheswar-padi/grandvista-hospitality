@@ -36,6 +36,11 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
       the scheduled sweeper and recovery job are now covered by `HoldExpirySchedulingIntegrationTest` and
       `BookingRecoverySchedulingTest`
 
+## Database per service (Phase 1, 22 Oct 2026)
+- [x] Four PostgreSQL servers (auth-db, room-db, booking-db, payment-db), own credentials/volume/health check;
+      `scripts/verify-db-isolation.sh` 28/28; fresh volumes → stack healthy → e2e 52/52
+- [x] Demo customer and staff accounts seeded from `.env` (`demoAccountsAreSeededWithTheirRolesOnly`)
+
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST
   exclusion-constraint deadlock (per-room row lock) · LocalDate JSON as arrays in load-balanced clients ·
@@ -55,6 +60,6 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Not done / limitations
 - Real payment provider (simulated only) · cloud deployment (none performed) · CI workflow never run on GitHub ·
-  in-memory gateway rate limiting; gateway and Eureka not run as multiple instances · one PostgreSQL server for
-  four databases · no e-mail notifications or message broker · responsive checks by emulation only ·
-  nothing committed to Git yet
+  in-memory gateway rate limiting; gateway and Eureka not run as multiple instances ·
+  no e-mail notifications or message broker · responsive checks by emulation only ·
+  not yet pushed to a remote

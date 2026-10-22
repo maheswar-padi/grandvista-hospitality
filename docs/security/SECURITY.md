@@ -100,7 +100,7 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
 * Services: stateless, CSRF disabled (bearer tokens), `denyAll` default rule, actuator exposes only health, info,
   prometheus.
 * Containers run as non-root users with memory limits; database and Eureka ports bound to `127.0.0.1`; services
-  not published at all; database credentials are per-service owners (least privilege between services).
+  not published at all; each service has its own PostgreSQL server and a non-superuser owner role that does not exist on the other servers.
 * Eureka dashboard and API require HTTP Basic (`registryRequiresCredentials` test).
 
 ## 6. Secrets management
@@ -127,4 +127,3 @@ Verified by: `authorizationIsEnforcedPerEndpoint` (room), `roleBoundariesAreEnfo
 | Payment provider is simulated; real provider signature scheme not implemented | n/a | implement `PaymentProvider` + provider webhook verification |
 | Dependency scanning is advisory (`npm audit`, dependency review) and not yet run in CI | Medium | enable OWASP dependency-check / Dependabot after pushing to GitHub |
 | No TLS in local Compose | n/a locally | terminate HTTPS at the load balancer in any shared deployment |
-| Single PostgreSQL server for four databases | Low | separate instances in production |

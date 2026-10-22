@@ -65,4 +65,4 @@ test class names refer to [TESTING.md](testing/TESTING.md) (148 backend + 24 fro
 | E-mail notifications | not built | **NOT IMPLEMENTED** (not required by the brief) |
 | Message broker (RabbitMQ/Kafka) | intentionally not used; outbox + HTTP relay provides at-least-once delivery (justified in ARCHITECTURE.md §4) | **NOT IMPLEMENTED** (by design) |
 | Multi-instance gateway / shared rate limiting | in-memory limiter | **PARTIAL** (single gateway instance) |
-| Separate database server per service | one PostgreSQL server with four databases and owner roles | **PARTIAL** (logical isolation) |
+| Separate database server per service | `docker-compose.yml` (`auth-db`, `room-db`, `booking-db`, `payment-db`), `infrastructure/docker/postgres/init/01-create-service-db.sh`; `scripts/verify-db-isolation.sh` (28/28 checks) | **VERIFIED (live)** |

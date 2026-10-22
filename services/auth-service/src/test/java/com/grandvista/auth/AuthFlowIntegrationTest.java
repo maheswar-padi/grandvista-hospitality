@@ -32,6 +32,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "eureka.client.enabled=false",
         "gv.auth.bootstrap-admin.email=Admin@Example.test",
         "gv.auth.bootstrap-admin.password=bootstrap-admin-pass-123",
+        "gv.auth.demo-users.enabled=true",
+        "gv.auth.demo-users.customer-email=Guest@Demo.test",
+        "gv.auth.demo-users.customer-password=demo-guest-pass-1",
+        "gv.auth.demo-users.staff-email=staff@demo.test",
+        "gv.auth.demo-users.staff-password=demo-staff-pass-1",
         "gv.auth.service-clients[0].client-id=booking-service",
         "gv.auth.service-clients[0].client-secret=0123456789abcdef0123456789abcdef-test",
         "gv.auth.service-clients[1].client-id=payment-service",
@@ -67,6 +72,19 @@ class AuthFlowIntegrationTest {
     private MvcResult login(String email, String password) throws Exception {
         return mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password))).andReturn();
+    }
+
+    @Test
+    void demoAccountsAreSeededWithTheirRolesOnly() throws Exception {
+        MvcResult guest = login("guest@demo.test", "demo-guest-pass-1");
+        assertThat(guest.getResponse().getStatus()).isEqualTo(200);
+        Jwt guestJwt = decoder.decode(json.readTree(guest.getResponse().getContentAsString()).get("accessToken").asText());
+        assertThat(guestJwt.getClaimAsStringList("roles")).containsExactly("CUSTOMER");
+
+        MvcResult staff = login("staff@demo.test", "demo-staff-pass-1");
+        assertThat(staff.getResponse().getStatus()).isEqualTo(200);
+        Jwt staffJwt = decoder.decode(json.readTree(staff.getResponse().getContentAsString()).get("accessToken").asText());
+        assertThat(staffJwt.getClaimAsStringList("roles")).containsExactly("STAFF");
     }
 
     @Test
