@@ -12,7 +12,8 @@ public final class Events {
     }
 
     public record BookingEvent(UUID eventId, String eventType, int schemaVersion, UUID bookingId, String reference,
-                               UUID customerId, String customerEmail, String guestName, String roomName,
+                               UUID customerId, String customerEmail, UUID propertyId, String propertyName,
+                               String guestName, String roomName,
                                String roomTypeName, String roomNumber, LocalDate checkIn, LocalDate checkOut,
                                Integer nights, Integer guests, BigDecimal totalAmount, String currency,
                                BigDecimal refundAmount, Instant holdExpiresAt, String status, String reason,

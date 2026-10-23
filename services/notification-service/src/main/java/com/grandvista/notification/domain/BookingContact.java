@@ -31,6 +31,9 @@ public class BookingContact {
     @Column(name = "guest_name")
     private String guestName;
 
+    @Column(name = "property_name")
+    private String propertyName;
+
     @Column(name = "room_name")
     private String roomName;
 
@@ -63,7 +66,8 @@ public class BookingContact {
     }
 
     /** Applies the event's data unless a newer event was already applied (events may arrive out of order). */
-    public boolean apply(String reference, String customerEmail, String guestName, String roomName, String roomTypeName,
+    public boolean apply(String reference, String customerEmail, String propertyName, String guestName, String roomName,
+            String roomTypeName,
             LocalDate checkIn, LocalDate checkOut, Integer nights, Integer guests, BigDecimal totalAmount,
             String currency, Instant occurredAt) {
         if (lastEventAt != null && occurredAt != null && occurredAt.isBefore(lastEventAt)) {
@@ -71,6 +75,7 @@ public class BookingContact {
         }
         this.reference = reference;
         this.customerEmail = customerEmail;
+        this.propertyName = propertyName;
         this.guestName = guestName;
         this.roomName = roomName;
         this.roomTypeName = roomTypeName;
@@ -94,6 +99,10 @@ public class BookingContact {
 
     public String getCustomerEmail() {
         return customerEmail;
+    }
+
+    public String getPropertyName() {
+        return propertyName;
     }
 
     public String getGuestName() {

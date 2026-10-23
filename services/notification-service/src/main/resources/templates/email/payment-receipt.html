@@ -7,6 +7,8 @@
     <tr><td style="padding:10px 14px;color:#6b6762;width:40%;">Amount paid</td><td style="padding:10px 14px;"><strong th:text="${paid}">₹10,584.00</strong></td></tr>
     <tr><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">Payment ID</td><td style="padding:10px 14px;border-top:1px solid #f0ece6;font-family:monospace;font-size:12px;" th:text="${paymentId}">id</td></tr>
     <tr th:if="${occurredAt}"><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">Date</td><td style="padding:10px 14px;border-top:1px solid #f0ece6;" th:text="${occurredAt}">date</td></tr>
+    <tr th:if="${propertyName}"><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">Hotel</td>
+      <td style="padding:10px 14px;border-top:1px solid #f0ece6;" th:text="${propertyName}">GrandVista Goa</td></tr>
     <tr th:if="${roomName}"><td style="padding:10px 14px;color:#6b6762;border-top:1px solid #f0ece6;">For</td>
       <td style="padding:10px 14px;border-top:1px solid #f0ece6;"><span th:text="${roomName}">Room</span>, <span th:text="${checkIn}">in</span> – <span th:text="${checkOut}">out</span></td></tr>
   </table>

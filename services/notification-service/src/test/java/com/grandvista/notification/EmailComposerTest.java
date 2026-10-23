@@ -28,7 +28,7 @@ class EmailComposerTest {
     }
 
     private EmailModel model(Kind kind, BigDecimal refund, String provider, String failure) {
-        return new EmailModel(kind, UUID.fromString("00000000-0000-0000-0000-000000000001"), "GV-ABC234", "Asha <Rao>",
+        return new EmailModel(kind, UUID.fromString("00000000-0000-0000-0000-000000000001"), "GV-ABC234", "GrandVista Goa", "Asha <Rao>",
                 "Classic Queen Room", "Classic Room", LocalDate.of(2027, 3, 10), LocalDate.of(2027, 3, 12), 2, 2,
                 new BigDecimal("10584.00"), refund, new BigDecimal("10584.00"), "INR", UUID.randomUUID(), provider, failure,
                 Instant.parse("2027-03-01T10:15:00Z"), Instant.parse("2027-03-01T10:00:00Z"));
@@ -41,7 +41,7 @@ class EmailComposerTest {
             assertThat(email.subject()).endsWith("— GV-ABC234");
             assertThat(email.html()).startsWith("<!DOCTYPE html>").contains("GrandVista Hospitality", "GV-ABC234")
                     .contains("Asha &lt;Rao&gt;").doesNotContain("Asha <Rao>");
-            assertThat(email.text()).contains("Booking reference: GV-ABC234");
+            assertThat(email.text()).contains("Booking reference: GV-ABC234", "Hotel: GrandVista Goa");
         }
         assertThat(composer.render(model(Kind.BOOKING_CONFIRMED, null, null, null)).html())
                 .contains("https://hotel.example/account/bookings/00000000-0000-0000-0000-000000000001", "₹10,584.00");

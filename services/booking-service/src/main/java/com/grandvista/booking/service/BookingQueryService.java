@@ -89,9 +89,10 @@ public class BookingQueryService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<BookingResponse> adminSearch(BookingStatus status, LocalDate from, LocalDate to, String q,
-            int page, int size) {
-        var filter = BookingSpecifications.allOf(BookingSpecifications.status(status),
+    public PageResponse<BookingResponse> adminSearch(UUID propertyId, BookingStatus status, LocalDate from, LocalDate to,
+            String q, int page, int size) {
+        var filter = BookingSpecifications.allOf(BookingSpecifications.property(propertyId),
+                BookingSpecifications.status(status),
                 BookingSpecifications.checkOutAfter(from), BookingSpecifications.checkInBefore(to),
                 BookingSpecifications.text(q));
         return PageResponse.of(bookings.findAll(filter, PageRequest.of(page, size, Sort.by("createdAt").descending())),
@@ -128,7 +129,8 @@ public class BookingQueryService {
             actions.add("CANCEL");
         }
         return new BookingResponse(b.getId(), b.getReference(), b.getStatus(), b.getStatusReason(),
-                new RoomSummary(b.getRoomId(), b.getRoomNumber(), b.getRoomName(), b.getRoomTypeName()),
+                new RoomSummary(b.getRoomId(), b.getRoomNumber(), b.getRoomName(), b.getRoomTypeName(), b.getPropertyId(),
+                        b.getPropertyName()),
                 b.getCheckIn(), b.getCheckOut(), b.getNights(), b.getGuests(),
                 guest == null ? null : new GuestResponse(guest.getFullName(), guest.getEmail(), guest.getPhone()),
                 b.getSpecialRequests(), price, b.getPaymentId(), b.getHoldExpiresAt(), b.getRefundAmount(), actions,

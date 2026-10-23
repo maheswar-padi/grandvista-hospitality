@@ -41,7 +41,8 @@ public class EmailComposer {
     }
 
     /** Everything an e-mail can show; fields not relevant to a kind are null. */
-    public record EmailModel(Kind kind, UUID bookingId, String reference, String guestName, String roomName,
+    public record EmailModel(Kind kind, UUID bookingId, String reference, String propertyName, String guestName,
+                             String roomName,
                              String roomTypeName, LocalDate checkIn, LocalDate checkOut, Integer nights, Integer guests,
                              BigDecimal totalAmount, BigDecimal refundAmount, BigDecimal paidAmount, String currency,
                              UUID paymentId, String provider, String failureCode, Instant holdExpiresAt, Instant occurredAt) {
@@ -72,6 +73,7 @@ public class EmailComposer {
         vars.put("reference", m.reference());
         vars.put("guestName", m.guestName() == null || m.guestName().isBlank() ? "Guest" : m.guestName());
         vars.put("roomName", m.roomName());
+        vars.put("propertyName", m.propertyName());
         vars.put("roomTypeName", m.roomTypeName());
         vars.put("checkIn", day(m.checkIn()));
         vars.put("checkOut", day(m.checkOut()));
@@ -98,6 +100,9 @@ public class EmailComposer {
         StringBuilder sb = new StringBuilder();
         sb.append("Dear ").append(v.get("guestName")).append(",\n\n").append(m.kind().headline).append(".\n\n");
         sb.append("Booking reference: ").append(m.reference()).append('\n');
+        if (m.propertyName() != null) {
+            sb.append("Hotel: ").append(m.propertyName()).append('\n');
+        }
         if (m.roomName() != null) {
             sb.append("Room: ").append(m.roomName()).append('\n');
         }

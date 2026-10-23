@@ -49,7 +49,7 @@ spring:
             - id: rooms
               uri: ${GV_ROUTE_ROOM:lb://room-service}
               predicates:
-                - Path=/api/v1/rooms/**,/api/v1/room-types/**,/api/v1/amenities/**,/api/v1/media/**,/api/v1/admin/rooms/**,/api/v1/admin/room-types/**,/api/v1/admin/amenities/**,/api/v1/admin/pricing/**,/api/v1/admin/inventory/**
+                - Path=/api/v1/properties,/api/v1/properties/**,/api/v1/admin/properties,/api/v1/admin/properties/**,/api/v1/rooms/**,/api/v1/room-types/**,/api/v1/amenities/**,/api/v1/media/**,/api/v1/admin/rooms/**,/api/v1/admin/room-types/**,/api/v1/admin/amenities/**,/api/v1/admin/pricing/**,/api/v1/admin/inventory/**
               filters:
                 - name: CircuitBreaker
                   args:

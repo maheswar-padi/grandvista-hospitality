@@ -222,4 +222,15 @@ class GatewayIntegrationTest {
                 .expectStatus().isOk()
                 .expectBody().jsonPath("$.slow").isEqualTo(true);
     }
+
+    @Test
+    void propertyPortfolioIsPublicForReadsAndAdminOnlyForWrites() throws Exception {
+        client.get().uri("/api/v1/properties").exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.upstreamPath").isEqualTo("/api/v1/properties");
+        client.get().uri("/api/v1/properties/d1000000-0000-4000-8000-000000000002").exchange().expectStatus().isOk();
+        client.post().uri("/api/v1/admin/properties").header("Content-Type", "application/json").bodyValue("{}")
+                .exchange().expectStatus().isUnauthorized();
+        client.post().uri("/api/v1/admin/properties").header("Authorization", "Bearer " + customerToken())
+                .header("Content-Type", "application/json").bodyValue("{}").exchange().expectStatus().isForbidden();
+    }
 }

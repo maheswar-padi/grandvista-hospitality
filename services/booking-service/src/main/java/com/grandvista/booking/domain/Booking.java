@@ -49,6 +49,13 @@ public class Booking {
     @Column(name = "room_type_name")
     private String roomTypeName;
 
+    /** Property (hotel) of the room, copied from the room-service hold; null for pre-portfolio bookings. */
+    @Column(name = "property_id")
+    private UUID propertyId;
+
+    @Column(name = "property_name")
+    private String propertyName;
+
     @Column(name = "check_in", nullable = false)
     private LocalDate checkIn;
 
@@ -163,8 +170,10 @@ public class Booking {
     }
 
     /** Records the room and the authoritative price returned with the inventory hold. Done once. */
-    public void attachHold(String roomNumber, String roomName, String roomTypeName, Instant holdExpiresAt,
-            BookingPriceSnapshot snapshot, Instant now) {
+    public void attachHold(UUID propertyId, String propertyName, String roomNumber, String roomName, String roomTypeName,
+            Instant holdExpiresAt, BookingPriceSnapshot snapshot, Instant now) {
+        this.propertyId = propertyId;
+        this.propertyName = propertyName;
         this.roomNumber = roomNumber;
         this.roomName = roomName;
         this.roomTypeName = roomTypeName;
@@ -220,6 +229,14 @@ public class Booking {
 
     public String getRoomTypeName() {
         return roomTypeName;
+    }
+
+    public UUID getPropertyId() {
+        return propertyId;
+    }
+
+    public String getPropertyName() {
+        return propertyName;
     }
 
     public LocalDate getCheckIn() {

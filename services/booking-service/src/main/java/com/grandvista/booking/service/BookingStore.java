@@ -66,7 +66,8 @@ public class BookingStore {
     public Booking attachHold(UUID bookingId, RoomServiceClient.Hold hold) {
         Booking b = lock(bookingId);
         var q = hold.quote();
-        b.attachHold(hold.roomNumber(), hold.roomName(), hold.roomTypeName(), hold.holdExpiresAt(),
+        b.attachHold(hold.propertyId(), hold.propertyName(), hold.roomNumber(), hold.roomName(), hold.roomTypeName(),
+                hold.holdExpiresAt(),
                 new BookingPriceSnapshot(b, q.pricingPolicyVersion(), q.nights(), q.subtotal(), q.serviceFee(), q.taxes(),
                         q.total(), q.currency(), q.quotedAt(), toJson(q.nightlyRates())), clock.instant());
         return b;

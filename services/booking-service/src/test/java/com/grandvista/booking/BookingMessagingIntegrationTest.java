@@ -99,6 +99,7 @@ class BookingMessagingIntegrationTest {
     JdbcTemplate jdbc;
 
     private final LocalDate checkIn = LocalDate.now(ZoneId.of("Asia/Kolkata")).plusDays(40);
+    static final UUID PROPERTY_ID = UUID.fromString("d1000000-0000-4000-8000-000000000002");
     private final UUID roomId = UUID.randomUUID();
     private final UUID customerId = UUID.randomUUID();
     private final UUID paymentId = UUID.randomUUID();
@@ -130,7 +131,8 @@ class BookingMessagingIntegrationTest {
         var quote = new RoomServiceClient.Quote("INR", checkIn, checkIn.plusDays(2), 2, List.of(night, night),
                 new BigDecimal("9000.00"), new BigDecimal("450.00"), new BigDecimal("1134.00"), new BigDecimal("10584.00"),
                 new BigDecimal("4500.00"), 1, Instant.now());
-        return new RoomServiceClient.Hold(UUID.randomUUID(), bookingId, roomId, "101", "Classic Queen Room", "Classic Room",
+        return new RoomServiceClient.Hold(UUID.randomUUID(), bookingId, PROPERTY_ID, "GrandVista Goa", "Goa", "Asia/Kolkata",
+                roomId, "101", "Classic Queen Room", "Classic Room",
                 checkIn, checkIn.plusDays(2), 2, status, Instant.now().plus(15, ChronoUnit.MINUTES), null, quote);
     }
 

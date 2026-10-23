@@ -88,6 +88,7 @@ class BookingSagaIntegrationTest {
     JdbcTemplate jdbc;
 
     private final LocalDate checkIn = LocalDate.now(ZoneId.of("Asia/Kolkata")).plusDays(30);
+    static final UUID PROPERTY_ID = UUID.fromString("d1000000-0000-4000-8000-000000000002");
     private final UUID roomId = UUID.randomUUID();
     private final UUID customerId = UUID.randomUUID();
     private final UUID paymentId = UUID.randomUUID();
@@ -107,7 +108,8 @@ class BookingSagaIntegrationTest {
         var quote = new RoomServiceClient.Quote("INR", checkIn, checkIn.plusDays(2), 2, List.of(night, night),
                 new BigDecimal("9000.00"), new BigDecimal("450.00"), total.subtract(new BigDecimal("9450.00")), total,
                 new BigDecimal("4500.00"), 1, Instant.now());
-        return new RoomServiceClient.Hold(UUID.randomUUID(), bookingId, roomId, "101", "Classic Queen Room", "Classic Room",
+        return new RoomServiceClient.Hold(UUID.randomUUID(), bookingId, PROPERTY_ID, "GrandVista Goa", "Goa", "Asia/Kolkata",
+                roomId, "101", "Classic Queen Room", "Classic Room",
                 checkIn, checkIn.plusDays(2), 2, status, Instant.now().plus(15, ChronoUnit.MINUTES), null, quote);
     }
 
@@ -173,6 +175,8 @@ class BookingSagaIntegrationTest {
         assertThat(booking.get("price").get("total").decimalValue()).isEqualByComparingTo("10584.00");
         assertThat(booking.get("price").get("nightlyRates")).hasSize(2);
         assertThat(booking.get("paymentId").asText()).isEqualTo(paymentId.toString());
+        assertThat(booking.get("room").get("propertyId").asText()).isEqualTo(PROPERTY_ID.toString());
+        assertThat(booking.get("room").get("propertyName").asText()).isEqualTo("GrandVista Goa");
         assertThat(booking.get("allowedActions").toString()).contains("PAY");
 
         // the payment is created for exactly the snapshot amount
@@ -189,6 +193,12 @@ class BookingSagaIntegrationTest {
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
         mvc.perform(get("/api/v1/bookings/{id}/history", id).with(customer(customerId)))
                 .andExpect(jsonPath("$[*].toStatus").value(org.hamcrest.Matchers.contains("CREATED", "PENDING_PAYMENT", "CONFIRMED")));
+
+        // staff can filter bookings by property
+        mvc.perform(get("/api/v1/admin/bookings").param("propertyId", PROPERTY_ID.toString()).with(personnel("STAFF")))
+                .andExpect(jsonPath("$.content[*].id").value(org.hamcrest.Matchers.hasItem(id.toString())));
+        mvc.perform(get("/api/v1/admin/bookings").param("propertyId", UUID.randomUUID().toString()).with(personnel("STAFF")))
+                .andExpect(jsonPath("$.totalElements").value(0));
 
         // transactional outbox: one event per published transition, written with the state change
         assertThat(jdbc.queryForList("SELECT event_type FROM outbox_events WHERE aggregate_id = ? ORDER BY created_at",

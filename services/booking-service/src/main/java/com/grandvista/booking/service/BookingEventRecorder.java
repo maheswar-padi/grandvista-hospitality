@@ -31,7 +31,8 @@ public class BookingEventRecorder {
      * not depend on the order in which events arrive.
      */
     public record BookingEventMessage(UUID eventId, String eventType, int schemaVersion, UUID bookingId, String reference,
-                                      UUID customerId, String customerEmail, String guestName, String roomName,
+                                      UUID customerId, String customerEmail, UUID propertyId, String propertyName,
+                                      String guestName, String roomName,
                                       String roomTypeName, String roomNumber, LocalDate checkIn, LocalDate checkOut,
                                       int nights, int guests, BigDecimal totalAmount, String currency,
                                       BigDecimal refundAmount, Instant holdExpiresAt, String status, String reason,
@@ -70,7 +71,8 @@ public class BookingEventRecorder {
         String guestName = booking.getGuestsList().stream().filter(BookingGuest::isPrimary).map(BookingGuest::getFullName)
                 .findFirst().orElse(null);
         var message = new BookingEventMessage(eventId, type, 1, booking.getId(), booking.getReference(),
-                booking.getCustomerId(), booking.getCustomerEmail(), guestName, booking.getRoomName(),
+                booking.getCustomerId(), booking.getCustomerEmail(), booking.getPropertyId(), booking.getPropertyName(),
+                guestName, booking.getRoomName(),
                 booking.getRoomTypeName(), booking.getRoomNumber(), booking.getCheckIn(), booking.getCheckOut(),
                 booking.getNights(), booking.getGuests(), booking.getTotalAmount(), booking.getCurrency(),
                 booking.getRefundAmount(), booking.getHoldExpiresAt(), booking.getStatus().name(),

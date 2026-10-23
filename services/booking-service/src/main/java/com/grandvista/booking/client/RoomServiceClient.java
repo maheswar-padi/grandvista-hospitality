@@ -31,7 +31,8 @@ public class RoomServiceClient {
                         BigDecimal averageNightlyRate, int pricingPolicyVersion, Instant quotedAt) {
     }
 
-    public record Hold(UUID allocationId, UUID bookingId, UUID roomId, String roomNumber, String roomName,
+    public record Hold(UUID allocationId, UUID bookingId, UUID propertyId, String propertyName, String propertyCity,
+                       String propertyTimeZone, UUID roomId, String roomNumber, String roomName,
                        String roomTypeName, LocalDate checkIn, LocalDate checkOut, int guests, String status,
                        Instant holdExpiresAt, Instant confirmedAt, Quote quote) {
     }

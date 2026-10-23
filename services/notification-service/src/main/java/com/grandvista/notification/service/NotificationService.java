@@ -76,13 +76,14 @@ public class NotificationService {
         };
         return tx.execute(status -> {
             BookingContact contact = contacts.findById(e.bookingId()).orElseGet(() -> new BookingContact(e.bookingId()));
-            contact.apply(e.reference(), e.customerEmail(), e.guestName(), e.roomName(), e.roomTypeName(), e.checkIn(),
+            contact.apply(e.reference(), e.customerEmail(), e.propertyName(), e.guestName(), e.roomName(), e.roomTypeName(), e.checkIn(),
                     e.checkOut(), e.nights(), e.guests(), e.totalAmount(), e.currency(), e.occurredAt());
             contacts.save(contact);
             if (kind == null) {
                 return Result.NO_EMAIL;
             }
-            EmailModel model = new EmailModel(kind, e.bookingId(), e.reference(), e.guestName(), e.roomName(),
+            EmailModel model = new EmailModel(kind, e.bookingId(), e.reference(), e.propertyName(), e.guestName(),
+                    e.roomName(),
                     e.roomTypeName(), e.checkIn(), e.checkOut(), e.nights(), e.guests(), e.totalAmount(), e.refundAmount(),
                     null, e.currency(), null, null, null, e.holdExpiresAt(), e.occurredAt());
             return sendOnce(e.eventId(), kind, e.customerEmail(), model);
@@ -100,7 +101,8 @@ public class NotificationService {
         }
         return tx.execute(status -> {
             BookingContact c = contacts.findById(e.bookingId()).orElseThrow(() -> new ContactNotYetKnownException(e.bookingId()));
-            EmailModel model = new EmailModel(kind, c.getBookingId(), c.getReference(), c.getGuestName(), c.getRoomName(),
+            EmailModel model = new EmailModel(kind, c.getBookingId(), c.getReference(), c.getPropertyName(),
+                    c.getGuestName(), c.getRoomName(),
                     c.getRoomTypeName(), c.getCheckIn(), c.getCheckOut(), c.getNights(), c.getGuests(), c.getTotalAmount(),
                     null, e.amount(), e.currency(), e.paymentId(), e.provider(), e.failureCode(), null, e.occurredAt());
             return sendOnce(e.eventId(), kind, c.getCustomerEmail(), model);

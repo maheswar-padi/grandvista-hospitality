@@ -42,13 +42,14 @@ public class AdminBookingController {
 
     @Operation(summary = "Search bookings by status, stay window, reference, e-mail or room (STAFF, ADMIN)")
     @GetMapping
-    public PageResponse<BookingResponse> search(@RequestParam(required = false) BookingStatus status,
+    public PageResponse<BookingResponse> search(@RequestParam(required = false) java.util.UUID propertyId,
+            @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) @Size(max = 100) String q,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(200) int size) {
-        return queries.adminSearch(status, from, to, q, page, size);
+        return queries.adminSearch(propertyId, status, from, to, q, page, size);
     }
 
     @Operation(summary = "Counts by status, confirmed revenue, arrivals today and 30-day trend (STAFF, ADMIN)")

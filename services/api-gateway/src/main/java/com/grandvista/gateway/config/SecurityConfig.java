@@ -42,7 +42,7 @@ public class SecurityConfig {
 
     static final String[] PUBLIC_POST = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
             "/api/v1/auth/logout", "/api/v1/payments/webhooks/**"};
-    static final String[] PUBLIC_GET = {"/api/v1/rooms/**", "/api/v1/room-types/**", "/api/v1/amenities/**",
+    static final String[] PUBLIC_GET = {"/api/v1/properties", "/api/v1/properties/**", "/api/v1/rooms/**", "/api/v1/room-types/**", "/api/v1/amenities/**",
             "/api/v1/media/**", "/api/v1/payments/test-methods"};
 
     @Bean

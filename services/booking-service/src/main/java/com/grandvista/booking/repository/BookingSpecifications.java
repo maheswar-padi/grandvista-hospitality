@@ -33,6 +33,10 @@ public final class BookingSpecifications {
         return statuses == null || statuses.isEmpty() ? null : (root, query, cb) -> root.get("status").in(statuses);
     }
 
+    public static Specification<Booking> property(UUID propertyId) {
+        return propertyId == null ? null : (root, query, cb) -> cb.equal(root.get("propertyId"), propertyId);
+    }
+
     public static Specification<Booking> status(BookingStatus status) {
         return status == null ? null : (root, query, cb) -> cb.equal(root.get("status"), status);
     }

@@ -46,7 +46,8 @@ public final class BookingDtos {
     public record CancelRequest(@Size(max = 200) String reason) {
     }
 
-    public record RoomSummary(UUID id, String roomNumber, String name, String typeName) {
+    public record RoomSummary(UUID id, String roomNumber, String name, String typeName, UUID propertyId,
+                              String propertyName) {
     }
 
     public record GuestResponse(String fullName, String email, String phone) {

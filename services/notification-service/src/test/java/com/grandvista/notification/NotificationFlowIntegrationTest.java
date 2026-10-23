@@ -89,7 +89,8 @@ class NotificationFlowIntegrationTest {
     private String bookingEvent(UUID eventId, String type, UUID bookingId, String reference, String email, String refund) {
         return """
                 {"eventId":"%s","eventType":"%s","schemaVersion":1,"bookingId":"%s","reference":"%s",
-                 "customerId":"%s","customerEmail":"%s","guestName":"Asha Rao","roomName":"Classic Queen Room",
+                 "customerId":"%s","customerEmail":"%s","propertyId":"d1000000-0000-4000-8000-000000000002",
+                 "propertyName":"GrandVista Goa","guestName":"Asha Rao","roomName":"Classic Queen Room",
                  "roomTypeName":"Classic Room","roomNumber":"101","checkIn":"2027-03-10","checkOut":"2027-03-12",
                  "nights":2,"guests":2,"totalAmount":10584.00,"currency":"INR","refundAmount":%s,
                  "holdExpiresAt":"2027-03-01T10:15:00Z","status":"X","reason":null,"occurredAt":"%s"}
@@ -153,7 +154,7 @@ class NotificationFlowIntegrationTest {
 
         for (JsonNode m : messages) {
             String html = html(m.path("ID").asText());
-            assertThat(html).contains("Asha Rao", "Classic Queen Room");
+            assertThat(html).contains("Asha Rao", "Classic Queen Room", "GrandVista Goa");
             if (m.path("Subject").asText().startsWith("Payment receipt")) {
                 assertThat(html).contains("₹10,584.00", "simulated payment");
             } else {
