@@ -16,10 +16,10 @@ import org.springframework.data.jpa.repository.Query;
 public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificationExecutor<Room> {
 
     /** Loads a page of rooms with type, amenities and images in a bounded number of queries (no N+1). */
-    @EntityGraph(attributePaths = {"roomType", "amenities"})
+    @EntityGraph(attributePaths = {"roomType", "amenities", "property"})
     List<Room> findAllByIdIn(Collection<UUID> ids);
 
-    @EntityGraph(attributePaths = {"roomType", "amenities"})
+    @EntityGraph(attributePaths = {"roomType", "amenities", "property"})
     Optional<Room> findWithDetailsById(UUID id);
 
     /**
@@ -32,7 +32,11 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
     @Query("select r from Room r where r.id = :id")
     Optional<Room> findByIdForUpdate(UUID id);
 
-    boolean existsByRoomNumber(String roomNumber);
+    boolean existsByPropertyIdAndRoomNumber(UUID propertyId, String roomNumber);
+
+    long countByPropertyId(UUID propertyId);
+
+    long countByPropertyIdAndStatus(UUID propertyId, RoomStatus status);
 
     long countByRoomTypeIdAndStatus(UUID roomTypeId, RoomStatus status);
 

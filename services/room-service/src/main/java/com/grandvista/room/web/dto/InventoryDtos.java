@@ -28,7 +28,8 @@ public final class InventoryDtos {
     public record ReleaseRequest(@NotNull @Pattern(regexp = "^[A-Z_]{3,60}$") String reason) {
     }
 
-    public record HoldResponse(UUID allocationId, UUID bookingId, UUID roomId, String roomNumber, String roomName,
+    public record HoldResponse(UUID allocationId, UUID bookingId, UUID propertyId, String propertyName, String propertyCity,
+                               String propertyTimeZone, UUID roomId, String roomNumber, String roomName,
                                String roomTypeName, LocalDate checkIn, LocalDate checkOut, int guests,
                                AllocationStatus status, Instant holdExpiresAt, Instant confirmedAt, PriceQuote quote) {
     }

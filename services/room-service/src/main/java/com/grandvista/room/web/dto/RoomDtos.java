@@ -31,9 +31,10 @@ public final class RoomDtos {
 
     public static final String MEDIA_PATH = "/api/v1/media/";
 
-    public record RoomTypeResponse(UUID id, String code, String name, String description, int sortOrder) {
+    public record RoomTypeResponse(UUID id, UUID propertyId, String code, String name, String description, int sortOrder) {
         public static RoomTypeResponse from(RoomType t) {
-            return new RoomTypeResponse(t.getId(), t.getCode(), t.getName(), t.getDescription(), t.getSortOrder());
+            return new RoomTypeResponse(t.getId(), t.getProperty().getId(), t.getCode(), t.getName(), t.getDescription(),
+                    t.getSortOrder());
         }
     }
 
@@ -58,14 +59,16 @@ public final class RoomDtos {
         }
     }
 
-    public record RoomResponse(UUID id, String roomNumber, String name, String description, RoomTypeResponse roomType,
+    public record RoomResponse(UUID id, PropertyDtos.PropertySummary property, String roomNumber, String name,
+                               String description, RoomTypeResponse roomType,
                                int maxOccupancy, String bedConfiguration, Short sizeSqM, Short floor, String viewType,
                                BigDecimal basePrice, String currency, RoomStatus status, String statusReason,
                                List<AmenityResponse> amenities, List<ImageResponse> images, StayPrice stayPrice,
                                long version, Instant updatedAt) {
 
         public static RoomResponse from(Room r, List<RoomImage> images, StayPrice stayPrice) {
-            return new RoomResponse(r.getId(), r.getRoomNumber(), r.getName(), r.getDescription(),
+            return new RoomResponse(r.getId(), PropertyDtos.PropertySummary.from(r.getProperty()), r.getRoomNumber(),
+                    r.getName(), r.getDescription(),
                     RoomTypeResponse.from(r.getRoomType()), r.getMaxOccupancy(), r.getBedConfiguration(), r.getSizeSqM(),
                     r.getFloor(), r.getViewType(), r.getBasePrice(), r.getCurrency(), r.getStatus(), r.getStatusReason(),
                     r.getAmenities().stream().sorted(Comparator.comparing(Amenity::getName)).map(AmenityResponse::from).toList(),
@@ -109,7 +112,9 @@ public final class RoomDtos {
     public record StatusChangeResponse(RoomResponse room, long futureConfirmedStays, String warning) {
     }
 
+    /** {@code propertyId}: the owning property; the default property when omitted. Fixed after creation. */
     public record RoomTypeRequest(
+            UUID propertyId,
             @NotBlank @Pattern(regexp = "^[A-Z_]{2,40}$") String code,
             @NotBlank @Size(max = 80) String name,
             @Size(max = 1000) String description,

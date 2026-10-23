@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,30 +34,33 @@ public class PricingPolicyService {
     }
 
     @Transactional(readOnly = true)
-    public PricingPolicy active() {
-        return policies.findActive().orElseThrow(() -> ApiException.notFound("PRICING_POLICY_MISSING", "No active policy."));
+    public PricingPolicy active(UUID propertyId) {
+        return policies.findActive(propertyId)
+                .orElseThrow(() -> ApiException.notFound("PRICING_POLICY_MISSING", "No active policy for this property."));
     }
 
     @Transactional(readOnly = true)
-    public List<PricingPolicy> history() {
-        return policies.findAllByOrderByVersionDesc();
+    public List<PricingPolicy> history(UUID propertyId) {
+        return policies.findAllByPropertyIdOrderByVersionDesc(propertyId);
     }
 
+    /** Publishes version N+1 of one property's policy; other properties are unaffected. */
     @Transactional
-    public PricingPolicy publish(PolicyRequest request, String actor) {
+    public PricingPolicy publish(UUID propertyId, PolicyRequest request, String actor) {
         validate(request);
-        // Lock the active row so two concurrent publishes cannot both become version N+1.
-        policies.findActiveForUpdate().ifPresent(current -> {
+        // Lock the property's active row so two concurrent publishes cannot both become version N+1.
+        policies.findActiveForUpdate(propertyId).ifPresent(current -> {
             current.archive();
             policies.saveAndFlush(current);
         });
-        PricingPolicy policy = new PricingPolicy(policies.maxVersion() + 1, request.weekendDays(),
+        PricingPolicy policy = new PricingPolicy(propertyId, policies.maxVersion(propertyId) + 1, request.weekendDays(),
                 request.weekendMultiplier(), request.minPriceFactor(), request.maxPriceFactor(), request.serviceFeeRate(),
                 request.taxRate(), request.notes(), actor, clock.instant());
         request.seasons().forEach(s -> policy.addSeason(s.name().trim(), s.startDate(), s.endDate(), s.multiplier()));
         request.demandTiers().forEach(t -> policy.addDemandTier(t.minOccupancy(), t.multiplier()));
         policies.save(policy);
-        audit.record(InventoryEvent.Type.PRICING_POLICY_PUBLISHED, null, null, null, "version " + policy.getVersion());
+        audit.record(InventoryEvent.Type.PRICING_POLICY_PUBLISHED, null, null, null,
+                "property " + propertyId + " version " + policy.getVersion());
         return policy;
     }
 

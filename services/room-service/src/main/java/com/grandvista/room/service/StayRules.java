@@ -20,17 +20,27 @@ public class StayRules {
     }
 
     public LocalDate today() {
-        return LocalDate.now(clock.withZone(hotel.zoneId()));
+        return today(hotel.zoneId());
     }
 
+    public LocalDate today(java.time.ZoneId zone) {
+        return LocalDate.now(clock.withZone(zone));
+    }
+
+    /** Validates against the default hotel zone (portfolio-wide searches). */
     public StayDates validate(LocalDate checkIn, LocalDate checkOut) {
+        return validate(checkIn, checkOut, hotel.zoneId());
+    }
+
+    /** Validates a stay at a property: "today" is the property's local date. */
+    public StayDates validate(LocalDate checkIn, LocalDate checkOut, java.time.ZoneId zone) {
         if (checkIn == null || checkOut == null) {
             throw ApiException.badRequest("DATES_REQUIRED", "Both check-in and check-out dates are required.");
         }
         if (!checkOut.isAfter(checkIn)) {
             throw ApiException.badRequest("INVALID_DATE_RANGE", "Check-out must be after check-in.");
         }
-        LocalDate today = today();
+        LocalDate today = today(zone);
         if (checkIn.isBefore(today)) {
             throw ApiException.badRequest("CHECK_IN_IN_PAST", "Check-in cannot be in the past.");
         }

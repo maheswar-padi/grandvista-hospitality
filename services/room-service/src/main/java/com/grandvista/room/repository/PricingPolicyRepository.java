@@ -11,15 +11,17 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface PricingPolicyRepository extends JpaRepository<PricingPolicy, UUID> {
 
-    @Query("select p from PricingPolicy p where p.status = com.grandvista.room.domain.PricingPolicy.Status.ACTIVE")
-    Optional<PricingPolicy> findActive();
+    @Query("select p from PricingPolicy p where p.propertyId = :propertyId"
+            + " and p.status = com.grandvista.room.domain.PricingPolicy.Status.ACTIVE")
+    Optional<PricingPolicy> findActive(UUID propertyId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from PricingPolicy p where p.status = com.grandvista.room.domain.PricingPolicy.Status.ACTIVE")
-    Optional<PricingPolicy> findActiveForUpdate();
+    @Query("select p from PricingPolicy p where p.propertyId = :propertyId"
+            + " and p.status = com.grandvista.room.domain.PricingPolicy.Status.ACTIVE")
+    Optional<PricingPolicy> findActiveForUpdate(UUID propertyId);
 
-    List<PricingPolicy> findAllByOrderByVersionDesc();
+    List<PricingPolicy> findAllByPropertyIdOrderByVersionDesc(UUID propertyId);
 
-    @Query("select coalesce(max(p.version), 0) from PricingPolicy p")
-    int maxVersion();
+    @Query("select coalesce(max(p.version), 0) from PricingPolicy p where p.propertyId = :propertyId")
+    int maxVersion(UUID propertyId);
 }

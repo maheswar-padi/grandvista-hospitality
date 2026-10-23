@@ -34,7 +34,13 @@ public class Room {
     @Id
     private UUID id;
 
-    @Column(name = "room_number", nullable = false, unique = true)
+    /** Same as the room type's property (enforced by a composite foreign key). */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "property_id")
+    private Property property;
+
+    /** Unique within the property. */
+    @Column(name = "room_number", nullable = false)
     private String roomNumber;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -95,6 +101,7 @@ public class Room {
     }
 
     public Room(String roomNumber, RoomType roomType, Details details, Instant now) {
+        this.property = roomType.getProperty();
         this.id = UUID.randomUUID();
         this.roomNumber = roomNumber;
         this.roomType = roomType;
@@ -109,6 +116,9 @@ public class Room {
     }
 
     public void update(RoomType type, Details details, Instant now) {
+        if (!type.getProperty().getId().equals(property.getId())) {
+            throw new IllegalArgumentException("A room cannot move to a room type of another property");
+        }
         this.roomType = type;
         apply(details, now);
     }
@@ -159,6 +169,10 @@ public class Room {
 
     public String getRoomNumber() {
         return roomNumber;
+    }
+
+    public Property getProperty() {
+        return property;
     }
 
     public RoomType getRoomType() {

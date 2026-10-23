@@ -45,12 +45,12 @@ public final class PricingDtos {
             @Size(max = 500) String notes) {
     }
 
-    public record PolicyResponse(UUID id, int version, String status, Set<DayOfWeek> weekendDays,
+    public record PolicyResponse(UUID id, UUID propertyId, int version, String status, Set<DayOfWeek> weekendDays,
                                  BigDecimal weekendMultiplier, BigDecimal minPriceFactor, BigDecimal maxPriceFactor,
                                  BigDecimal serviceFeeRate, BigDecimal taxRate, List<SeasonDto> seasons,
                                  List<DemandTierDto> demandTiers, String notes, String createdBy, Instant createdAt) {
         public static PolicyResponse from(PricingPolicy p) {
-            return new PolicyResponse(p.getId(), p.getVersion(), p.getStatus().name(), p.weekendDaySet(),
+            return new PolicyResponse(p.getId(), p.getPropertyId(), p.getVersion(), p.getStatus().name(), p.weekendDaySet(),
                     p.getWeekendMultiplier(), p.getMinPriceFactor(), p.getMaxPriceFactor(), p.getServiceFeeRate(),
                     p.getTaxRate(),
                     p.getSeasons().stream().map(s -> new SeasonDto(s.getName(), s.getStartDate(), s.getEndDate(),

@@ -31,7 +31,11 @@ public class PricingPolicy {
     @Id
     private UUID id;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "property_id", nullable = false)
+    private UUID propertyId;
+
+    /** Version number within the property's policy history. */
+    @Column(nullable = false)
     private int version;
 
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
@@ -77,10 +81,11 @@ public class PricingPolicy {
     protected PricingPolicy() {
     }
 
-    public PricingPolicy(int version, Set<DayOfWeek> weekendDays, BigDecimal weekendMultiplier,
+    public PricingPolicy(UUID propertyId, int version, Set<DayOfWeek> weekendDays, BigDecimal weekendMultiplier,
             BigDecimal minPriceFactor, BigDecimal maxPriceFactor, BigDecimal serviceFeeRate, BigDecimal taxRate,
             String notes, String createdBy, Instant now) {
         this.id = UUID.randomUUID();
+        this.propertyId = propertyId;
         this.version = version;
         this.status = Status.ACTIVE;
         this.weekendDays = weekendDays.stream().sorted().map(DayOfWeek::name).collect(Collectors.joining(","));
@@ -114,6 +119,15 @@ public class PricingPolicy {
         return EnumSet.copyOf(days);
     }
 
+    /** A copy of these rules as version {@code version} of another property's policy history. */
+    public PricingPolicy copyFor(UUID targetPropertyId, int targetVersion, String notes, String actor, Instant now) {
+        PricingPolicy copy = new PricingPolicy(targetPropertyId, targetVersion, weekendDaySet(), weekendMultiplier,
+                minPriceFactor, maxPriceFactor, serviceFeeRate, taxRate, notes, actor, now);
+        seasons.forEach(s -> copy.addSeason(s.getName(), s.getStartDate(), s.getEndDate(), s.getMultiplier()));
+        demandTiers.forEach(t -> copy.addDemandTier(t.getMinOccupancy(), t.getMultiplier()));
+        return copy;
+    }
+
     public PricingPolicySnapshot toSnapshot() {
         return new PricingPolicySnapshot(version, weekendDaySet(), weekendMultiplier, minPriceFactor, maxPriceFactor,
                 serviceFeeRate, taxRate,
@@ -125,6 +139,10 @@ public class PricingPolicy {
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getPropertyId() {
+        return propertyId;
     }
 
     public int getVersion() {

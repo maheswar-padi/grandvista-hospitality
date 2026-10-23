@@ -52,17 +52,22 @@ public class OccupancyQueries {
         return result;
     }
 
-    /** Hotel-wide occupancy for the admin dashboard. */
-    public List<DailyOccupancy> hotelWide(LocalDate from, LocalDate to, Instant now) {
+    /** Occupancy for the admin dashboard: one property, or the whole portfolio when {@code propertyId} is null. */
+    public List<DailyOccupancy> hotelWide(UUID propertyId, LocalDate from, LocalDate to, Instant now) {
         var params = new MapSqlParameterSource()
-                .addValue("from", Date.valueOf(from)).addValue("to", Date.valueOf(to)).addValue("now", Timestamp.from(now));
-        Long sellable = jdbc.queryForObject("SELECT count(*) FROM rooms WHERE status = 'ACTIVE'", params, Long.class);
+                .addValue("from", Date.valueOf(from)).addValue("to", Date.valueOf(to)).addValue("now", Timestamp.from(now))
+                .addValue("propertyId", propertyId);
+        String roomFilter = propertyId == null ? "" : " AND property_id = :propertyId";
+        Long sellable = jdbc.queryForObject("SELECT count(*) FROM rooms WHERE status = 'ACTIVE'" + roomFilter, params,
+                Long.class);
         return jdbc.query("""
                 SELECT n::date AS night, count(a.id) AS allocated
                 FROM generate_series(CAST(:from AS date), CAST(:to AS date) - 1, interval '1 day') AS n
                 LEFT JOIN inventory_allocations a ON a.stay_range @> n::date AND %s
+                     %s
                 GROUP BY n ORDER BY n
-                """.formatted(ACTIVE_ALLOCATION), params,
+                """.formatted(ACTIVE_ALLOCATION, propertyId == null ? ""
+                        : "AND a.room_id IN (SELECT id FROM rooms WHERE property_id = :propertyId)"), params,
                 (rs, i) -> toDaily(rs.getDate("night").toLocalDate(), rs.getLong("allocated"), sellable));
     }
 

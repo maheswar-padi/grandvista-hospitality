@@ -41,11 +41,13 @@ public class RoomCatalogService {
     private final MediaStorage media;
     private final MediaProperties mediaProperties;
     private final StayRules stayRules;
+    private final PropertyService properties;
     private final Clock clock;
 
     public RoomCatalogService(RoomRepository rooms, RoomTypeRepository roomTypes, AmenityRepository amenities,
             InventoryAllocationRepository allocations, InventoryAuditService audit, MediaStorage media,
-            MediaProperties mediaProperties, StayRules stayRules, Clock clock) {
+            MediaProperties mediaProperties, StayRules stayRules, PropertyService properties, Clock clock) {
+        this.properties = properties;
         this.rooms = rooms;
         this.roomTypes = roomTypes;
         this.amenities = amenities;
@@ -60,12 +62,16 @@ public class RoomCatalogService {
     @Transactional
     public Room create(RoomRequest request) {
         String number = request.roomNumber().trim().toUpperCase();
-        if (rooms.existsByRoomNumber(number)) {
-            throw ApiException.conflict("ROOM_NUMBER_TAKEN", "Room number " + number + " already exists.");
+        RoomType type = requireType(request.roomTypeId());
+        // The room belongs to its type's property; numbers are unique within that property.
+        if (rooms.existsByPropertyIdAndRoomNumber(type.getProperty().getId(), number)) {
+            throw ApiException.conflict("ROOM_NUMBER_TAKEN", "Room number " + number + " already exists at "
+                    + type.getProperty().getName() + ".");
         }
-        Room room = new Room(number, requireType(request.roomTypeId()), details(request), clock.instant());
+        Room room = new Room(number, type, details(request), clock.instant());
         rooms.save(room);
-        audit.record(InventoryEvent.Type.ROOM_CREATED, room.getId(), null, null, "room " + number);
+        audit.record(InventoryEvent.Type.ROOM_CREATED, room.getId(), null, null,
+                "room " + number + " at " + type.getProperty().getCode());
         return room;
     }
 
@@ -79,7 +85,12 @@ public class RoomCatalogService {
         if (!number.equals(room.getRoomNumber())) {
             throw ApiException.unprocessable("ROOM_NUMBER_IMMUTABLE", "The room number cannot be changed.");
         }
-        room.update(requireType(request.roomTypeId()), details(request), clock.instant());
+        RoomType type = requireType(request.roomTypeId());
+        if (!type.getProperty().getId().equals(room.getProperty().getId())) {
+            throw ApiException.unprocessable("ROOM_TYPE_OTHER_PROPERTY",
+                    "The room type belongs to another property; a room cannot move between properties.");
+        }
+        room.update(type, details(request), clock.instant());
         audit.record(InventoryEvent.Type.ROOM_UPDATED, room.getId(), null, null, "base price " + request.basePrice());
         return room;
     }
@@ -96,7 +107,7 @@ public class RoomCatalogService {
     public StatusChange changeStatus(UUID roomId, RoomStatus status, String reason) {
         Room room = rooms.findByIdForUpdate(roomId)
                 .orElseThrow(() -> ApiException.notFound("ROOM_NOT_FOUND", "Room not found."));
-        long future = allocations.countFutureConfirmed(roomId, stayRules.today());
+        long future = allocations.countFutureConfirmed(roomId, stayRules.today(room.getProperty().zoneId()));
         if (status == RoomStatus.INACTIVE && future > 0) {
             throw ApiException.conflict("ROOM_HAS_UPCOMING_STAYS",
                     "The room has " + future + " upcoming confirmed stay(s); cancel or move them before retiring it.");
@@ -142,11 +153,12 @@ public class RoomCatalogService {
 
     @Transactional
     public RoomType createType(RoomTypeRequest request) {
-        if (roomTypes.existsByCode(request.code())) {
-            throw ApiException.conflict("ROOM_TYPE_CODE_TAKEN", "Room type code already exists.");
+        var property = properties.resolve(request.propertyId());
+        if (roomTypes.existsByPropertyIdAndCode(property.getId(), request.code())) {
+            throw ApiException.conflict("ROOM_TYPE_CODE_TAKEN", "Room type code already exists at " + property.getName() + ".");
         }
-        return roomTypes.save(new RoomType(request.code(), request.name(), request.description(), request.sortOrder(),
-                clock.instant()));
+        return roomTypes.save(new RoomType(property, request.code(), request.name(), request.description(),
+                request.sortOrder(), clock.instant()));
     }
 
     @Transactional
@@ -154,6 +166,9 @@ public class RoomCatalogService {
         RoomType type = requireType(id);
         if (!type.getCode().equals(request.code())) {
             throw ApiException.unprocessable("ROOM_TYPE_CODE_IMMUTABLE", "The room type code cannot be changed.");
+        }
+        if (request.propertyId() != null && !request.propertyId().equals(type.getProperty().getId())) {
+            throw ApiException.unprocessable("ROOM_TYPE_PROPERTY_IMMUTABLE", "A room type cannot move to another property.");
         }
         type.update(request.name(), request.description(), request.sortOrder(), clock.instant());
         return type;

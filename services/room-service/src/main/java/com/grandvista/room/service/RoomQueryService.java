@@ -55,7 +55,8 @@ public class RoomQueryService {
         }
     }
 
-    public record SearchCriteria(LocalDate checkIn, LocalDate checkOut, Integer guests, String roomTypeCode,
+    public record SearchCriteria(UUID propertyId, String city, LocalDate checkIn, LocalDate checkOut, Integer guests,
+                                 String roomTypeCode,
                                  BigDecimal minPrice, BigDecimal maxPrice, Set<String> amenityCodes, SortOrder sort,
                                  int page, int size) {
     }
@@ -69,11 +70,13 @@ public class RoomQueryService {
     private final PricingService pricing;
     private final OccupancyQueries occupancy;
     private final StayRules stayRules;
+    private final PropertyService properties;
     private final Clock clock;
 
     public RoomQueryService(NamedParameterJdbcTemplate jdbc, RoomRepository rooms, RoomImageRepository images,
             InventoryAllocationRepository allocations, PricingService pricing, OccupancyQueries occupancy,
-            StayRules stayRules, Clock clock) {
+            StayRules stayRules, PropertyService properties, Clock clock) {
+        this.properties = properties;
         this.jdbc = jdbc;
         this.rooms = rooms;
         this.images = images;
@@ -92,14 +95,24 @@ public class RoomQueryService {
     public PageResponse<RoomResponse> search(SearchCriteria c) {
         StayDates stay = null;
         if (c.checkIn() != null || c.checkOut() != null) {
-            stay = stayRules.validate(c.checkIn(), c.checkOut());
+            // One property: dates are judged in its time zone. Portfolio-wide: in the default hotel zone.
+            stay = c.propertyId() == null ? stayRules.validate(c.checkIn(), c.checkOut())
+                    : stayRules.validate(c.checkIn(), c.checkOut(), properties.resolve(c.propertyId()).zoneId());
         }
         if (c.minPrice() != null && c.maxPrice() != null && c.minPrice().compareTo(c.maxPrice()) > 0) {
             throw ApiException.badRequest("INVALID_PRICE_RANGE", "minPrice cannot exceed maxPrice.");
         }
 
-        StringBuilder where = new StringBuilder("r.status = 'ACTIVE'");
+        StringBuilder where = new StringBuilder("r.status = 'ACTIVE' AND p.active");
         MapSqlParameterSource params = new MapSqlParameterSource();
+        if (c.propertyId() != null) {
+            where.append(" AND r.property_id = :propertyId");
+            params.addValue("propertyId", c.propertyId());
+        }
+        if (c.city() != null && !c.city().isBlank()) {
+            where.append(" AND lower(p.city) = lower(:city)");
+            params.addValue("city", c.city().trim());
+        }
         if (c.guests() != null) {
             where.append(" AND r.max_occupancy >= :guests");
             params.addValue("guests", c.guests());
@@ -132,7 +145,8 @@ public class RoomQueryService {
             params.addValue("checkIn", Date.valueOf(stay.checkIn())).addValue("checkOut", Date.valueOf(stay.checkOut()))
                     .addValue("now", Timestamp.from(clock.instant()));
         }
-        String from = " FROM rooms r JOIN room_types rt ON rt.id = r.room_type_id WHERE " + where;
+        String from = " FROM rooms r JOIN room_types rt ON rt.id = r.room_type_id JOIN properties p ON p.id = r.property_id"
+                + " WHERE " + where;
         Long total = jdbc.queryForObject("SELECT count(*)" + from, params, Long.class);
         params.addValue("limit", c.size()).addValue("offset", (long) c.page() * c.size());
         SortOrder sort = c.sort() == null ? SortOrder.RECOMMENDED : c.sort();
@@ -155,8 +169,8 @@ public class RoomQueryService {
 
     @Transactional(readOnly = true)
     public AvailabilityResponse availability(UUID roomId, LocalDate checkIn, LocalDate checkOut) {
-        StayDates stay = stayRules.validate(checkIn, checkOut);
         Room room = publicRoom(roomId);
+        StayDates stay = stayRules.validate(checkIn, checkOut, room.getProperty().zoneId());
         String reason = unavailableReason(room, stay);
         return new AvailabilityResponse(roomId, checkIn, checkOut, reason == null, reason);
     }
@@ -167,9 +181,9 @@ public class RoomQueryService {
         if (days < 1 || days > MAX_CALENDAR_DAYS) {
             throw ApiException.badRequest("INVALID_CALENDAR_RANGE", "days must be between 1 and " + MAX_CALENDAR_DAYS + ".");
         }
-        LocalDate start = from == null ? stayRules.today() : from;
+        Room room = publicRoom(roomId);
+        LocalDate start = from == null ? stayRules.today(room.getProperty().zoneId()) : from;
         LocalDate end = start.plusDays(days);
-        publicRoom(roomId);
         TreeSet<LocalDate> nights = new TreeSet<>();
         for (InventoryAllocation a : allocations.findBlocking(roomId, start, end, clock.instant())) {
             a.getCheckIn().datesUntil(a.getCheckOut()).filter(d -> !d.isBefore(start) && d.isBefore(end)).forEach(nights::add);
@@ -179,8 +193,8 @@ public class RoomQueryService {
 
     @Transactional(readOnly = true)
     public QuoteResponse quote(UUID roomId, LocalDate checkIn, LocalDate checkOut, int guests) {
-        StayDates stay = stayRules.validate(checkIn, checkOut);
         Room room = publicRoom(roomId);
+        StayDates stay = stayRules.validate(checkIn, checkOut, room.getProperty().zoneId());
         if (guests > room.getMaxOccupancy()) {
             throw ApiException.unprocessable("GUEST_COUNT_EXCEEDS_CAPACITY",
                     "This room accommodates at most " + room.getMaxOccupancy() + " guests.");
@@ -199,7 +213,7 @@ public class RoomQueryService {
 
     private Room publicRoom(UUID roomId) {
         return rooms.findWithDetailsById(roomId)
-                .filter(r -> r.getStatus() != RoomStatus.INACTIVE)
+                .filter(r -> r.getStatus() != RoomStatus.INACTIVE && r.getProperty().isActive())
                 .orElseThrow(() -> ApiException.notFound("ROOM_NOT_FOUND", "Room not found."));
     }
 
@@ -213,7 +227,7 @@ public class RoomQueryService {
         images.findForRooms(ids).forEach(row ->
                 imagesByRoom.computeIfAbsent(row.getRoomId(), k -> new ArrayList<>()).add(row.getImage()));
 
-        PricingPolicySnapshot policy = stay == null ? null : pricing.activePolicy();
+        Map<UUID, PricingPolicySnapshot> policyByProperty = new HashMap<>();
         Map<UUID, Map<LocalDate, BigDecimal>> demandByType = new HashMap<>();
         List<RoomResponse> result = new ArrayList<>(ids.size());
         for (UUID id : ids) {
@@ -224,6 +238,8 @@ public class RoomQueryService {
             StayPrice price = null;
             if (stay != null) {
                 StayDates s = stay;
+                PricingPolicySnapshot policy = policyByProperty.computeIfAbsent(room.getProperty().getId(),
+                        pricing::activePolicy);
                 Map<LocalDate, BigDecimal> demand = demandByType.computeIfAbsent(room.getRoomType().getId(),
                         typeId -> occupancy.byRoomType(typeId, s.checkIn(), s.checkOut(), clock.instant()));
                 PriceQuote quote = com.grandvista.room.pricing.PricingEngine.quote(room.getBasePrice(), room.getCurrency(),

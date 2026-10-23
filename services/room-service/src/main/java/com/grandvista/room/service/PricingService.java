@@ -33,9 +33,10 @@ public class PricingService {
         this.clock = clock;
     }
 
+    /** Active policy of one property. */
     @Transactional(readOnly = true)
-    public PricingPolicySnapshot activePolicy() {
-        return policies.findActive()
+    public PricingPolicySnapshot activePolicy(java.util.UUID propertyId) {
+        return policies.findActive(propertyId)
                 .orElseThrow(() -> new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "PRICING_POLICY_MISSING",
                         "Pricing is temporarily unavailable."))
                 .toSnapshot();
@@ -43,7 +44,7 @@ public class PricingService {
 
     @Transactional(readOnly = true)
     public PriceQuote quote(Room room, StayDates stay) {
-        return quote(room, stay, activePolicy());
+        return quote(room, stay, activePolicy(room.getProperty().getId()));
     }
 
     @Transactional(readOnly = true)

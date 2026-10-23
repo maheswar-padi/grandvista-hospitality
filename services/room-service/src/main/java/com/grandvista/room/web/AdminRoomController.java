@@ -66,12 +66,16 @@ public class AdminRoomController {
     @Operation(summary = "List all rooms in any status (STAFF, ADMIN)")
     @GetMapping("/rooms")
     @Transactional(readOnly = true)
-    public PageResponse<RoomResponse> list(@RequestParam(required = false) RoomStatus status,
+    public PageResponse<RoomResponse> list(@RequestParam(required = false) UUID propertyId,
+            @RequestParam(required = false) RoomStatus status,
             @RequestParam(required = false) @Size(max = 60) String q,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int size) {
-        Specification<Room> filter = Specs.allOf(Specs.eq("status", status), Specs.containsIgnoreCase(q, "name", "roomNumber"));
-        var result = rooms.findAll(filter, PageRequest.of(page, size, Sort.by("roomNumber")));
+        Specification<Room> byProperty = propertyId == null ? null
+                : (root, query, cb) -> cb.equal(root.get("property").get("id"), propertyId);
+        Specification<Room> filter = Specs.allOf(byProperty, Specs.eq("status", status),
+                Specs.containsIgnoreCase(q, "name", "roomNumber"));
+        var result = rooms.findAll(filter, PageRequest.of(page, size, Sort.by("property.name", "roomNumber")));
         // one batched load for the page (rooms, amenities, images) instead of a query per room
         List<RoomResponse> content = queries.toResponses(result.getContent().stream().map(Room::getId).toList(), null);
         return new PageResponse<>(content, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());

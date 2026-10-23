@@ -5,13 +5,20 @@ import com.grandvista.room.domain.Room;
 import com.grandvista.room.domain.RoomType;
 import com.grandvista.room.media.ImageType;
 import com.grandvista.room.media.MediaStorage;
+import com.grandvista.room.domain.Property;
 import com.grandvista.room.repository.AmenityRepository;
+import com.grandvista.room.repository.PricingPolicyRepository;
+import com.grandvista.room.repository.PropertyRepository;
+import com.grandvista.room.service.PropertyService;
 import com.grandvista.room.repository.RoomRepository;
 import com.grandvista.room.repository.RoomTypeRepository;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.UUID;
+import java.time.ZoneId;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -86,41 +93,89 @@ public class DemoDataSeeder implements ApplicationRunner {
         return java.util.stream.Stream.concat(CORE.stream(), java.util.Arrays.stream(extra)).distinct().toList();
     }
 
+    /** Demo portfolio: the original hotel (created by migration V3) plus two more in other cities. */
+    private record DemoProperty(UUID id, String code, String name, String city, String country, String zone,
+                                List<String> roomNumbers) {
+    }
+
+    private static final List<DemoProperty> PROPERTIES = List.of(
+            new DemoProperty(PropertyService.DEFAULT_PROPERTY_ID, "HYD", "GrandVista Hyderabad", "Hyderabad", "IN",
+                    "Asia/Kolkata", ROOMS.stream().map(DemoRoom::number).toList()),
+            new DemoProperty(UUID.fromString("d1000000-0000-4000-8000-000000000002"), "GOA", "GrandVista Goa", "Goa", "IN",
+                    "Asia/Kolkata", List.of("101", "202", "301", "402")),
+            new DemoProperty(UUID.fromString("d1000000-0000-4000-8000-000000000003"), "DXB", "GrandVista Dubai", "Dubai", "AE",
+                    "Asia/Dubai", List.of("102", "201", "401", "501")));
+
     private final RoomRepository rooms;
     private final RoomTypeRepository roomTypes;
     private final AmenityRepository amenities;
+    private final PropertyRepository properties;
+    private final PricingPolicyRepository policies;
     private final MediaStorage media;
     private final Clock clock;
 
     public DemoDataSeeder(RoomRepository rooms, RoomTypeRepository roomTypes, AmenityRepository amenities,
-            MediaStorage media, Clock clock) {
+            PropertyRepository properties, PricingPolicyRepository policies, MediaStorage media, Clock clock) {
         this.rooms = rooms;
         this.roomTypes = roomTypes;
         this.amenities = amenities;
+        this.properties = properties;
+        this.policies = policies;
         this.media = media;
         this.clock = clock;
     }
 
+    /**
+     * Idempotent per property: creates a missing demo property with room types and an initial pricing policy
+     * copied from the original hotel, and seeds rooms only into a property that has none.
+     */
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (rooms.count() > 0) {
+        Instant now = clock.instant();
+        Property template = properties.findById(PropertyService.DEFAULT_PROPERTY_ID).orElse(null);
+        if (template == null) {
+            log.warn("DEMO DATA: default property missing; nothing seeded.");
             return;
         }
-        Map<String, RoomType> types = roomTypes.findAll().stream().collect(Collectors.toMap(RoomType::getCode, Function.identity()));
+        List<RoomType> templateTypes = roomTypes.findAllByPropertyIdOrderBySortOrderAscNameAsc(template.getId());
         Map<String, Amenity> amenityByCode = amenities.findAll().stream()
                 .collect(Collectors.toMap(Amenity::getCode, Function.identity()));
+        Map<String, DemoRoom> roomByNumber = ROOMS.stream().collect(Collectors.toMap(DemoRoom::number, Function.identity()));
+        int createdRooms = 0;
         int images = 0;
-        for (DemoRoom d : ROOMS) {
-            List<Amenity> roomAmenities = d.amenities().stream().map(amenityByCode::get).toList();
-            Room room = new Room(d.number(), types.get(d.type()), new Room.Details(d.name(), d.description(),
-                    (short) d.occupancy(), d.beds(), (short) d.size(), (short) d.floor(), d.view(),
-                    new BigDecimal(d.price()), CURRENCY, roomAmenities), clock.instant());
-            images += attachImage(room, d);
-            rooms.save(room);
+        for (DemoProperty dp : PROPERTIES) {
+            Property property = properties.findById(dp.id()).orElseGet(() -> properties.save(new Property(dp.id(), dp.code(),
+                    dp.name(), dp.city(), dp.country(), ZoneId.of(dp.zone()), now)));
+            if (roomTypes.findAllByPropertyIdOrderBySortOrderAscNameAsc(property.getId()).isEmpty()) {
+                templateTypes.forEach(t -> roomTypes.save(new RoomType(property, t.getCode(), t.getName(), t.getDescription(),
+                        t.getSortOrder(), now)));
+                roomTypes.flush();
+            }
+            if (policies.findActive(property.getId()).isEmpty()) {
+                policies.findActive(template.getId()).ifPresent(p -> policies.save(p.copyFor(property.getId(), 1,
+                        "Demo: initial policy copied from " + template.getName() + ".", "system", now)));
+            }
+            if (rooms.countByPropertyId(property.getId()) > 0) {
+                continue;
+            }
+            Map<String, RoomType> types = roomTypes.findAllByPropertyIdOrderBySortOrderAscNameAsc(property.getId()).stream()
+                    .collect(Collectors.toMap(RoomType::getCode, Function.identity()));
+            for (String number : dp.roomNumbers()) {
+                DemoRoom d = roomByNumber.get(number);
+                List<Amenity> roomAmenities = d.amenities().stream().map(amenityByCode::get).toList();
+                Room room = new Room(d.number(), types.get(d.type()), new Room.Details(d.name(), d.description(),
+                        (short) d.occupancy(), d.beds(), (short) d.size(), (short) d.floor(), d.view(),
+                        new BigDecimal(d.price()), CURRENCY, roomAmenities), now);
+                images += attachImage(room, d);
+                rooms.save(room);
+                createdRooms++;
+            }
         }
-        log.info("DEMO DATA: created {} fictional rooms ({} illustrative images). Disable with GV_DEMO_SEED_ENABLED=false.",
-                ROOMS.size(), images);
+        if (createdRooms > 0) {
+            log.info("DEMO DATA: {} properties, created {} fictional rooms ({} illustrative images). "
+                    + "Disable with GV_DEMO_SEED_ENABLED=false.", PROPERTIES.size(), createdRooms, images);
+        }
     }
 
     private int attachImage(Room room, DemoRoom d) {

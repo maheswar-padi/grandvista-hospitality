@@ -10,7 +10,9 @@ public interface RoomTypeRepository extends JpaRepository<RoomType, UUID> {
 
     List<RoomType> findAllByOrderBySortOrderAscNameAsc();
 
-    Optional<RoomType> findByCode(String code);
+    List<RoomType> findAllByPropertyIdOrderBySortOrderAscNameAsc(UUID propertyId);
 
-    boolean existsByCode(String code);
+    Optional<RoomType> findByPropertyIdAndCode(UUID propertyId, String code);
+
+    boolean existsByPropertyIdAndCode(UUID propertyId, String code);
 }

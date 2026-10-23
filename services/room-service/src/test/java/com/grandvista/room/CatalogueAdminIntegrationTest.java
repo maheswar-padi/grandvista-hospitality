@@ -55,11 +55,15 @@ class CatalogueAdminIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
     void demoSeederCreatesTheFictionalCatalogueOnceWithIllustrations() throws Exception {
         // other tests in this class may add rooms numbered T-…; the seeded demo rooms are the others
-        java.util.function.LongSupplier demoRooms = () -> rooms.findAll().stream()
-                .filter(r -> !r.getRoomNumber().startsWith("T-")).count();
-        assertThat(demoRooms.getAsLong()).isEqualTo(11);
+        // three demo properties: the original hotel (11 rooms) and two more (4 rooms each)
+        java.util.function.Function<String, Long> demoRooms = code -> rooms.findAll().stream()
+                .filter(r -> r.getProperty().getCode().equals(code) && !r.getRoomNumber().startsWith("T-")).count();
+        assertThat(demoRooms.apply("HYD")).isEqualTo(11);
+        assertThat(demoRooms.apply("GOA")).isEqualTo(4);
+        assertThat(demoRooms.apply("DXB")).isEqualTo(4);
         long before = rooms.count();
         seeder.run(new DefaultApplicationArguments());
         assertThat(rooms.count()).isEqualTo(before); // idempotent: never seeds a non-empty catalogue

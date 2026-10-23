@@ -28,8 +28,11 @@ public class CatalogController {
     @Operation(summary = "Room types")
     @GetMapping("/room-types")
     @Transactional(readOnly = true)
-    public List<RoomTypeResponse> roomTypes() {
-        return roomTypes.findAllByOrderBySortOrderAscNameAsc().stream().map(RoomTypeResponse::from).toList();
+    public List<RoomTypeResponse> roomTypes(@org.springframework.web.bind.annotation.RequestParam(required = false)
+            java.util.UUID propertyId) {
+        var list = propertyId == null ? roomTypes.findAllByOrderBySortOrderAscNameAsc()
+                : roomTypes.findAllByPropertyIdOrderBySortOrderAscNameAsc(propertyId);
+        return list.stream().map(RoomTypeResponse::from).toList();
     }
 
     @Operation(summary = "Amenities")

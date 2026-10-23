@@ -79,9 +79,14 @@ public class InventoryService {
             return toResponse(a, rooms.findWithDetailsById(a.getRoomId()).orElseThrow());
         }
 
-        StayDates stay = stayRules.validate(request.checkIn(), request.checkOut());
         Room room = rooms.findByIdForUpdate(request.roomId())
                 .orElseThrow(() -> ApiException.notFound("ROOM_NOT_FOUND", "Room not found."));
+        if (!room.getProperty().isActive()) {
+            throw ApiException.conflict("ROOM_NOT_AVAILABLE", "This property is not taking bookings.",
+                    Map.of("reason", "PROPERTY_INACTIVE"));
+        }
+        // Stay dates are calendar dates at the room's property.
+        StayDates stay = stayRules.validate(request.checkIn(), request.checkOut(), room.getProperty().zoneId());
         if (!room.getStatus().isSellable()) {
             throw ApiException.conflict("ROOM_NOT_AVAILABLE", "This room is not available for booking.",
                     Map.of("reason", "ROOM_" + room.getStatus().name()));
@@ -209,7 +214,8 @@ public class InventoryService {
     }
 
     private HoldResponse toResponse(InventoryAllocation a, Room room, PriceQuote quote) {
-        return new HoldResponse(a.getId(), a.getBookingId(), room.getId(), room.getRoomNumber(), room.getName(),
+        return new HoldResponse(a.getId(), a.getBookingId(), room.getProperty().getId(), room.getProperty().getName(),
+                room.getProperty().getCity(), room.getProperty().getTimeZone(), room.getId(), room.getRoomNumber(), room.getName(),
                 room.getRoomType().getName(), a.getCheckIn(), a.getCheckOut(), a.getGuests(), a.getStatus(),
                 a.getHoldExpiresAt(), a.getConfirmedAt(), quote);
     }

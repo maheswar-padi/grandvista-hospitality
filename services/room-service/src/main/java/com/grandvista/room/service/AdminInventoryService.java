@@ -56,13 +56,19 @@ public class AdminInventoryService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AllocationResponse> allocations(UUID roomId, Collection<AllocationStatus> statuses,
+    public PageResponse<AllocationResponse> allocations(UUID propertyId, UUID roomId, Collection<AllocationStatus> statuses,
             LocalDate from, LocalDate to, int page, int size) {
         LocalDate start = from == null ? stayRules.today().minusDays(30) : from;
         LocalDate end = to == null ? start.plusDays(365) : to;
         Collection<AllocationStatus> effective = statuses == null || statuses.isEmpty()
                 ? EnumSet.allOf(AllocationStatus.class) : statuses;
-        Specification<InventoryAllocation> filter = Specs.allOf(Specs.eq("roomId", roomId),
+        Specification<InventoryAllocation> byProperty = propertyId == null ? null : (root, query, cb) -> {
+            var sub = query.subquery(UUID.class);
+            var room = sub.from(com.grandvista.room.domain.Room.class);
+            sub.select(room.get("id")).where(cb.equal(room.get("property").get("id"), propertyId));
+            return root.get("roomId").in(sub);
+        };
+        Specification<InventoryAllocation> filter = Specs.allOf(byProperty, Specs.eq("roomId", roomId),
                 (root, query, cb) -> root.get("status").in(effective),
                 (root, query, cb) -> cb.lessThan(root.get("checkIn"), end),
                 (root, query, cb) -> cb.greaterThan(root.get("checkOut"), start));
@@ -78,29 +84,35 @@ public class AdminInventoryService {
     }
 
     @Transactional(readOnly = true)
-    public List<OccupancyPoint> occupancy(LocalDate from, LocalDate to) {
+    public List<OccupancyPoint> occupancy(UUID propertyId, LocalDate from, LocalDate to) {
         LocalDate start = from == null ? stayRules.today() : from;
         LocalDate end = to == null ? start.plusDays(30) : to;
         if (!end.isAfter(start) || start.plusDays(MAX_OCCUPANCY_RANGE_DAYS).isBefore(end)) {
             throw ApiException.badRequest("INVALID_DATE_RANGE", "Range must be 1 to " + MAX_OCCUPANCY_RANGE_DAYS + " days.");
         }
-        return occupancy.hotelWide(start, end, clock.instant()).stream()
+        return occupancy.hotelWide(propertyId, start, end, clock.instant()).stream()
                 .map(d -> new OccupancyPoint(d.date(), d.allocatedRooms(), d.sellableRooms(), d.ratio().doubleValue()))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public InventorySummary summary() {
+    public InventorySummary summary(UUID propertyId) {
         LocalDate today = stayRules.today();
-        var todayOccupancy = occupancy.hotelWide(today, today.plusDays(1), clock.instant());
+        var todayOccupancy = occupancy.hotelWide(propertyId, today, today.plusDays(1), clock.instant());
+        var params = new java.util.HashMap<String, Object>();
+        params.put("today", Date.valueOf(today));
+        params.put("propertyId", propertyId);
         Map<String, Object> movements = jdbc.queryForMap("""
                 SELECT count(*) FILTER (WHERE check_in = :today) AS arrivals,
                        count(*) FILTER (WHERE check_out = :today) AS departures
                 FROM inventory_allocations WHERE status = 'CONFIRMED'
-                """, Map.of("today", Date.valueOf(today)));
-        return new InventorySummary(rooms.count(), rooms.countByStatus(RoomStatus.ACTIVE),
-                rooms.countByStatus(RoomStatus.MAINTENANCE), rooms.countByStatus(RoomStatus.OUT_OF_SERVICE),
-                rooms.countByStatus(RoomStatus.INACTIVE),
+                """ + (propertyId == null ? "" : " AND room_id IN (SELECT id FROM rooms WHERE property_id = :propertyId)"),
+                params);
+        java.util.function.Function<RoomStatus, Long> count = status -> propertyId == null ? rooms.countByStatus(status)
+                : rooms.countByPropertyIdAndStatus(propertyId, status);
+        return new InventorySummary(propertyId == null ? rooms.count() : rooms.countByPropertyId(propertyId),
+                count.apply(RoomStatus.ACTIVE), count.apply(RoomStatus.MAINTENANCE), count.apply(RoomStatus.OUT_OF_SERVICE),
+                count.apply(RoomStatus.INACTIVE),
                 todayOccupancy.isEmpty() ? 0 : todayOccupancy.get(0).ratio().doubleValue(),
                 ((Number) movements.get("arrivals")).longValue(), ((Number) movements.get("departures")).longValue());
     }

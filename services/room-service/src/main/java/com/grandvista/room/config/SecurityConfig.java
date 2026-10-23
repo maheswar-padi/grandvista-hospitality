@@ -30,7 +30,7 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/api/v1/rooms/**", "/api/v1/room-types/**",
+                        .requestMatchers(HttpMethod.GET, "/api/v1/properties", "/api/v1/properties/**", "/api/v1/rooms/**", "/api/v1/room-types/**",
                                 "/api/v1/amenities/**", "/api/v1/media/**").permitAll()
                         .requestMatchers("/internal/**").hasRole(Roles.SERVICE)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/admin/rooms/*/status").hasAnyRole(Roles.ADMIN, Roles.STAFF)

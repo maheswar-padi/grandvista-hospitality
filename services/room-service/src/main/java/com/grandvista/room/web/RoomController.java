@@ -42,6 +42,8 @@ public class RoomController {
     @Operation(summary = "Search rooms; with checkIn/checkOut only rooms free for the whole stay are returned")
     @GetMapping
     public PageResponse<RoomResponse> search(
+            @RequestParam(required = false) UUID propertyId,
+            @RequestParam(required = false) @Size(max = 80) String city,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkIn,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOut,
             @RequestParam(required = false) @Min(1) @Max(12) Integer guests,
@@ -52,7 +54,8 @@ public class RoomController {
             @RequestParam(defaultValue = "RECOMMENDED") SortOrder sort,
             @RequestParam(defaultValue = "0") @Min(0) @Max(1000) int page,
             @RequestParam(defaultValue = "12") @Min(1) @Max(50) int size) {
-        return queries.search(new SearchCriteria(checkIn, checkOut, guests, roomType, minPrice, maxPrice, amenities,
+        return queries.search(new SearchCriteria(propertyId, city, checkIn, checkOut, guests, roomType, minPrice, maxPrice,
+                amenities,
                 sort, page, size));
     }
 
