@@ -7,8 +7,9 @@ import { RoomIllustration } from '../components/rooms/RoomIllustration';
 import { SearchBar } from '../components/rooms/SearchBar';
 import { ButtonLink } from '../components/ui/Button';
 import { ErrorState } from '../components/ui/States';
-import { roomsApi } from '../lib/api/endpoints';
+import { propertiesApi, roomsApi } from '../lib/api/endpoints';
 import { defaultStay } from '../lib/dates';
+import { uniqueRoomTypes } from '../lib/destinations';
 
 const promises = [
   {
@@ -32,7 +33,8 @@ export function HomePage() {
   const navigate = useNavigate();
   const stay = defaultStay();
   const featured = useQuery({ queryKey: ['rooms', 'featured'], queryFn: () => roomsApi.search({ size: 3, sort: 'RECOMMENDED' }) });
-  const types = useQuery({ queryKey: ['room-types'], queryFn: roomsApi.roomTypes, staleTime: 300_000 });
+  const types = useQuery({ queryKey: ['room-types', undefined], queryFn: () => roomsApi.roomTypes(), staleTime: 300_000, select: uniqueRoomTypes });
+  const hotels = useQuery({ queryKey: ['properties'], queryFn: propertiesApi.list, staleTime: 300_000 });
   const amenities = useQuery({ queryKey: ['amenities'], queryFn: roomsApi.amenities, staleTime: 300_000 });
 
   return (
@@ -53,12 +55,40 @@ export function HomePage() {
           <div className="mt-10 max-w-5xl">
             <SearchBar
               variant="hero"
+              withDestination
               defaults={{ ...stay, guests: 2 }}
-              onSearch={(v) => navigate({ pathname: '/rooms', search: createSearchParams({ checkIn: v.checkIn, checkOut: v.checkOut, guests: String(v.guests) }).toString() })}
+              onSearch={(v, d) =>
+                navigate({
+                  pathname: '/rooms',
+                  search: createSearchParams({
+                    checkIn: v.checkIn,
+                    checkOut: v.checkOut,
+                    guests: String(v.guests),
+                    ...(d.propertyId ? { propertyId: d.propertyId } : {}),
+                    ...(d.city ? { city: d.city } : {}),
+                  }).toString(),
+                })
+              }
             />
           </div>
         </div>
       </section>
+
+      {hotels.data && hotels.data.length > 0 && (
+        <section className="container-page pt-20" aria-labelledby="hotels-heading">
+          <p className="eyebrow">Our hotels</p>
+          <h2 id="hotels-heading" className="mt-2 text-4xl">{hotels.data.length} hotels, one booking experience</h2>
+          <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {hotels.data.map((h) => (
+              <li key={h.id} className="card flex flex-col gap-1 p-5">
+                <span className="text-2xl">{h.name}</span>
+                <span className="text-sm text-ink-600">{h.city}, {h.country} · {h.activeRooms} rooms · local time zone {h.timeZone}</span>
+                <ButtonLink to={`/rooms?propertyId=${h.id}`} variant="secondary" size="sm" className="mt-3 self-start">View rooms</ButtonLink>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="container-page py-20" aria-labelledby="featured-heading">
         <div className="flex flex-wrap items-end justify-between gap-4">

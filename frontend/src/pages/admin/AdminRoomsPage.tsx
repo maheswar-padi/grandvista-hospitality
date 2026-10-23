@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui/States
 import { adminApi } from '../../lib/api/endpoints';
 import { ApiError } from '../../lib/api/http';
 import type { Room, RoomStatus } from '../../lib/api/types';
+import { useAdminProperty } from '../../lib/adminProperty';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { formatMoney, humanize } from '../../lib/format';
 
@@ -54,9 +55,10 @@ export default function AdminRoomsPage() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Room | null>(null);
+  const { propertyId } = useAdminProperty();
   const rooms = useQuery({
-    queryKey: ['admin', 'rooms', status, q, page],
-    queryFn: () => adminApi.rooms({ status: status || undefined, q: q || undefined, page, size: 25 }),
+    queryKey: ['admin', 'rooms', propertyId, status, q, page],
+    queryFn: () => adminApi.rooms({ propertyId, status: status || undefined, q: q || undefined, page, size: 25 }),
     placeholderData: keepPreviousData,
   });
 
@@ -79,11 +81,12 @@ export default function AdminRoomsPage() {
       ) : (
         <>
           <Table caption="Rooms">
-            <thead><tr><th className={th}>Room</th><th className={th}>Type</th><th className={th}>Capacity</th><th className={th}>Base rate</th><th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th className={th}>Room</th><th className={th}>Hotel</th><th className={th}>Type</th><th className={th}>Capacity</th><th className={th}>Base rate</th><th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {rooms.data.content.map((r) => (
                 <tr key={r.id}>
                   <td className={td}><span className="font-semibold">{r.roomNumber}</span><span className="block text-xs text-ink-500">{r.name}</span></td>
+                  <td className={td}>{r.property.name}<span className="block text-xs text-ink-500">{r.property.city}</span></td>
                   <td className={td}>{r.roomType.name}</td>
                   <td className={td}>{r.maxOccupancy}</td>
                   <td className={`${td} tabular-nums`}>{formatMoney(r.basePrice, r.currency, 0)}</td>

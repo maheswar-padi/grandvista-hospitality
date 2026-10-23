@@ -79,7 +79,7 @@ export default function RoomDetailsPage() {
           )}
           {images.length === 0 && <p className="mt-2 text-xs text-ink-500">Illustrative artwork — photographs have not been uploaded for this room.</p>}
 
-          <p className="eyebrow mt-8">{r.roomType.name} · Room {r.roomNumber}</p>
+          <p className="eyebrow mt-8">{r.property ? `${r.property.name}, ${r.property.city} · ` : ''}{r.roomType.name} · Room {r.roomNumber}</p>
           <h1 className="mt-2 text-4xl sm:text-5xl">{r.name}</h1>
           <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-700">
             <li className="flex items-center gap-2"><Users className="size-4 text-gold-600" aria-hidden /> Up to {r.maxOccupancy} guests</li>

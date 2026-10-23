@@ -1,20 +1,28 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarDays, Search, Users } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { CalendarDays, MapPin, Search, Users } from 'lucide-react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { propertiesApi } from '../../lib/api/endpoints';
 import { hotelToday, plusDays } from '../../lib/dates';
+import { decodeDestination, encodeDestination, groupByCity, type Destination } from '../../lib/destinations';
 import { staySchema, type StayForm } from '../../lib/schemas';
 import { Button } from '../ui/Button';
 import { cn } from '../ui/cn';
 
 interface Props {
-  defaults: { checkIn: string; checkOut: string; guests: number };
-  onSearch: (values: StayForm) => void;
+  defaults: { checkIn: string; checkOut: string; guests: number; destination?: Destination };
+  onSearch: (values: StayForm, destination: Destination) => void;
   variant?: 'hero' | 'inline';
   submitLabel?: string;
+  /** show the hotel/city selector (home and search pages; not on a room's own page) */
+  withDestination?: boolean;
 }
 
-/** Date-and-guests search used on the home page, the search page and room details. */
-export function SearchBar({ defaults, onSearch, variant = 'inline', submitLabel = 'Search availability' }: Props) {
+/** Date-and-guests search (plus an optional destination) used on the home page, the search page and room details. */
+export function SearchBar({ defaults, onSearch, variant = 'inline', submitLabel = 'Search availability', withDestination = false }: Props) {
+  const [destination, setDestination] = useState(encodeDestination(defaults.destination ?? {}));
+  const properties = useQuery({ queryKey: ['properties'], queryFn: propertiesApi.list, staleTime: 300_000, enabled: withDestination });
   const {
     register,
     handleSubmit,
@@ -30,11 +38,33 @@ export function SearchBar({ defaults, onSearch, variant = 'inline', submitLabel 
 
   return (
     <form
-      onSubmit={handleSubmit((v) => onSearch(v as StayForm))}
-      className={cn('grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_0.7fr_auto]', variant === 'hero' && 'rounded-2xl bg-white/95 p-3 shadow-2xl ring-1 ring-black/5 backdrop-blur')}
+      onSubmit={handleSubmit((v) => onSearch(v as StayForm, decodeDestination(destination)))}
+      className={cn(
+        'grid gap-3 sm:grid-cols-2',
+        withDestination ? 'lg:grid-cols-[1.3fr_1fr_1fr_0.7fr_auto]' : 'lg:grid-cols-[1fr_1fr_0.7fr_auto]',
+        variant === 'hero' && 'rounded-2xl bg-white/95 p-3 shadow-2xl ring-1 ring-black/5 backdrop-blur',
+      )}
       aria-label="Search rooms"
       noValidate
     >
+      {withDestination && (
+        <div className="sm:col-span-2 lg:col-span-1">
+          <label className={fieldBox}>
+            <span className={labelCls}><MapPin className="size-3.5" aria-hidden /> Destination</span>
+            <select className={inputCls} value={destination} onChange={(e) => setDestination(e.target.value)} aria-label="Destination: city or hotel">
+              <option value="">All destinations</option>
+              {groupByCity(properties.data ?? []).map((g) => (
+                <optgroup key={g.city} label={`${g.city}, ${g.country}`}>
+                  <option value={encodeDestination({ city: g.city })}>Anywhere in {g.city}</option>
+                  {g.hotels.map((p) => (
+                    <option key={p.id} value={encodeDestination({ propertyId: p.id })}>{p.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <div>
         <label className={fieldBox}>
           <span className={labelCls}><CalendarDays className="size-3.5" aria-hidden /> Check-in</span>

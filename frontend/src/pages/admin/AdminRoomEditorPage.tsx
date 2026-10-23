@@ -12,6 +12,7 @@ import { SelectField, TextAreaField, TextField } from '../../components/ui/Field
 import { ErrorState, LoadingBlock } from '../../components/ui/States';
 import { adminApi, roomsApi, type RoomBody } from '../../lib/api/endpoints';
 import { ApiError } from '../../lib/api/http';
+import { useAdminProperty } from '../../lib/adminProperty';
 import { useAuth } from '../../lib/auth/AuthContext';
 
 const optionalInt = z.preprocess((v) => (v === '' || v === null || Number.isNaN(v) ? undefined : Number(v)), z.number().int().optional());
@@ -43,9 +44,16 @@ export default function AdminRoomEditorPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [altText, setAltText] = useState('');
 
-  const types = useQuery({ queryKey: ['room-types'], queryFn: roomsApi.roomTypes });
+  const { effective } = useAdminProperty();
   const amenities = useQuery({ queryKey: ['amenities'], queryFn: roomsApi.amenities });
   const room = useQuery({ queryKey: ['admin', 'room', roomId], queryFn: () => adminApi.room(roomId!), enabled: !isNew });
+  // a room belongs to one hotel: existing rooms keep theirs, new rooms are created in the selected (or default) hotel
+  const hotel = isNew ? effective : room.data?.property;
+  const types = useQuery({
+    queryKey: ['room-types', hotel?.id],
+    queryFn: () => roomsApi.roomTypes(hotel?.id),
+    enabled: !!hotel,
+  });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -90,7 +98,7 @@ export default function AdminRoomEditorPage() {
   return (
     <>
       <Link to="/admin/rooms" className="mb-2 inline-flex items-center gap-1.5 py-2.5 text-sm text-ink-600 hover:text-ink-900"><ArrowLeft className="size-4" aria-hidden /> All rooms</Link>
-      <AdminHeader title={isNew ? 'New room' : `Room ${room.data?.roomNumber}`} description={isNew ? 'New rooms are created as Active.' : 'Changes to the base rate apply to new quotes only; existing bookings keep their price snapshot.'} />
+      <AdminHeader title={isNew ? 'New room' : `Room ${room.data?.roomNumber}`} description={`${hotel ? `${hotel.name}, ${hotel.city}. ` : ''}${isNew ? 'New rooms are created as Active in this hotel; choose another hotel in the menu to add rooms there.' : 'Changes to the base rate apply to new quotes only; existing bookings keep their price snapshot.'}`} />
       <form onSubmit={handleSubmit((v) => save.mutate(v as FormValues))} className="card space-y-6 p-6" noValidate>
         <fieldset disabled={readOnly} className="grid gap-5 sm:grid-cols-2">
           <TextField label="Room number" disabled={!isNew} error={errors.roomNumber?.message} {...register('roomNumber')} />

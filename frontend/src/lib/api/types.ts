@@ -29,8 +29,26 @@ export interface Page<T> {
   totalPages: number;
 }
 
+export interface PropertySummary {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  country: string;
+  timeZone: string;
+}
+
+export interface Property extends PropertySummary {
+  active: boolean;
+  totalRooms: number;
+  activeRooms: number;
+  createdAt: string;
+  version: number;
+}
+
 export interface RoomType {
   id: string;
+  propertyId: string;
   code: string;
   name: string;
   description: string | null;
@@ -65,6 +83,7 @@ export interface StayPrice {
 
 export interface Room {
   id: string;
+  property: PropertySummary;
   roomNumber: string;
   name: string;
   description: string | null;
@@ -146,7 +165,14 @@ export interface Booking {
   reference: string;
   status: BookingStatus;
   statusReason: string | null;
-  room: { id: string; roomNumber: string | null; name: string | null; typeName: string | null };
+  room: {
+    id: string;
+    roomNumber: string | null;
+    name: string | null;
+    typeName: string | null;
+    propertyId: string | null;
+    propertyName: string | null;
+  };
   checkIn: string;
   checkOut: string;
   nights: number;
@@ -300,6 +326,7 @@ export interface PaymentSummary {
 
 export interface PricingPolicy {
   id: string;
+  propertyId: string;
   version: number;
   status: 'ACTIVE' | 'ARCHIVED';
   weekendDays: string[];
@@ -319,4 +346,46 @@ export interface StatusChangeResponse {
   room: Room;
   futureConfirmedStays: number;
   warning: string | null;
+}
+
+export type FindingType =
+  | 'ORPHAN_HOLD'
+  | 'ALLOCATION_WITHOUT_BOOKING'
+  | 'STATUS_MISMATCH'
+  | 'CONFIRMED_BOOKING_WITHOUT_ALLOCATION'
+  | 'PENDING_BOOKING_WITHOUT_HOLD';
+
+export interface ReconciliationFinding {
+  type: FindingType;
+  severity: 'WARNING' | 'CRITICAL';
+  action: 'NONE' | 'RELEASE_EXPIRED_ORPHAN_HOLD';
+  bookingId: string | null;
+  bookingReference: string | null;
+  allocationId: string | null;
+  roomId: string | null;
+  roomNumber: string | null;
+  checkIn: string | null;
+  checkOut: string | null;
+  allocationStatus: string | null;
+  bookingStatus: string | null;
+  detail: string;
+}
+
+export interface ReconciliationReport {
+  id: string;
+  propertyId: string;
+  propertyCode: string;
+  propertyName: string;
+  trigger: 'SCHEDULED' | 'MANUAL';
+  status: 'COMPLETED' | 'FAILED';
+  startedAt: string;
+  finishedAt: string;
+  actor: string;
+  allocationsChecked: number;
+  bookingsChecked: number;
+  findingCount: number;
+  releasedCount: number;
+  countsByType: Record<FindingType, number>;
+  error: string | null;
+  findings: ReconciliationFinding[];
 }

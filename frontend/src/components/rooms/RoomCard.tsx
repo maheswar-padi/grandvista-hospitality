@@ -24,7 +24,9 @@ export function RoomCard({ room, search }: { room: Room; search?: string }) {
               {room.name}
             </Link>
           </h3>
-          <p className="mt-1 text-xs text-ink-500">Room {room.roomNumber}{room.viewType ? ` · ${room.viewType} view` : ''}</p>
+          <p className="mt-1 text-xs text-ink-500">
+            {room.property ? `${room.property.name} · ${room.property.city} · ` : ''}Room {room.roomNumber}{room.viewType ? ` · ${room.viewType} view` : ''}
+          </p>
         </div>
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-600">
           <li className="flex items-center gap-1.5"><Users className="size-4" aria-hidden /> Up to {room.maxOccupancy}</li>

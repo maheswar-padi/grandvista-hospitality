@@ -10,11 +10,12 @@ import { ErrorState, LoadingBlock } from '../../components/ui/States';
 import { adminApi } from '../../lib/api/endpoints';
 import { ApiError } from '../../lib/api/http';
 import type { PricingPolicy } from '../../lib/api/types';
+import { useAdminProperty } from '../../lib/adminProperty';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { formatDate, formatDateTime } from '../../lib/format';
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-type Draft = Omit<PricingPolicy, 'id' | 'version' | 'status' | 'createdBy' | 'createdAt'>;
+type Draft = Omit<PricingPolicy, 'id' | 'propertyId' | 'version' | 'status' | 'createdBy' | 'createdAt'>;
 
 function toDraft(p: PricingPolicy): Draft {
   return {
@@ -38,11 +39,13 @@ function PolicySummary({ p }: { p: PricingPolicy }) {
 export default function AdminPricingPage() {
   const { hasRole } = useAuth();
   const queryClient = useQueryClient();
-  const active = useQuery({ queryKey: ['admin', 'policy'], queryFn: adminApi.activePolicy });
-  const history = useQuery({ queryKey: ['admin', 'policies'], queryFn: adminApi.policies });
+  const { propertyId, effective } = useAdminProperty();
+  const hotelId = effective?.id;
+  const active = useQuery({ queryKey: ['admin', 'policy', hotelId], queryFn: () => adminApi.activePolicy(hotelId) });
+  const history = useQuery({ queryKey: ['admin', 'policies', hotelId], queryFn: () => adminApi.policies(hotelId) });
   const [draft, setDraft] = useState<Draft | null>(null);
   const publish = useMutation({
-    mutationFn: (d: Draft) => adminApi.publishPolicy(d),
+    mutationFn: (d: Draft) => adminApi.publishPolicy(d, hotelId),
     onSuccess: () => {
       setDraft(null);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'policy'] });
@@ -58,8 +61,9 @@ export default function AdminPricingPage() {
   return (
     <>
       <AdminHeader
-        title="Dynamic pricing"
-        description="nightly rate = base × weekend × season × demand, clamped to the price limits and rounded to the paisa; then service fee and tax. Publishing creates a new immutable version; existing bookings keep the price they were quoted."
+        title={`Dynamic pricing${effective ? ` · ${effective.name}` : ''}`}
+        description={`${!propertyId && effective ? 'Pricing is set per hotel; choose a hotel in the menu (showing the default hotel). ' : ''}`
+          + "Nightly rate = base × weekend × season × demand, clamped to the price limits and rounded to the paisa; then service fee and tax. Publishing creates a new immutable version; existing bookings keep the price they were quoted."}
         actions={hasRole('ADMIN') && !draft && <Button onClick={() => setDraft(toDraft(active.data))}>Edit as new version</Button>}
       />
       <section className="card p-6">

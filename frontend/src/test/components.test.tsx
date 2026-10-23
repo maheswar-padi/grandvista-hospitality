@@ -25,7 +25,7 @@ describe('SearchBar', () => {
     await userEvent.clear(checkOutInput);
     await userEvent.type(checkOutInput, plusDays(day, 2));
     await userEvent.click(screen.getByRole('button', { name: /search availability/i }));
-    await waitFor(() => expect(onSearch).toHaveBeenCalledWith({ checkIn: day, checkOut: plusDays(day, 2), guests: 2 }));
+    await waitFor(() => expect(onSearch).toHaveBeenCalledWith({ checkIn: day, checkOut: plusDays(day, 2), guests: 2 }, {}));
   });
 });
 

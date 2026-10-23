@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui/States
 import { adminApi } from '../../lib/api/endpoints';
 import { ApiError } from '../../lib/api/http';
 import type { Booking, BookingStatus } from '../../lib/api/types';
+import { useAdminProperty } from '../../lib/adminProperty';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { bookingStatusLabel, formatDate, formatDateTime, formatMoney, humanize } from '../../lib/format';
 import { CancelBookingDialog } from '../BookingDetailPage';
@@ -26,9 +27,10 @@ export default function AdminBookingsPage() {
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
   const [cancelling, setCancelling] = useState<Booking | null>(null);
+  const { propertyId } = useAdminProperty();
   const bookings = useQuery({
-    queryKey: ['admin-bookings', status, q, from, to, page],
-    queryFn: () => adminApi.bookings({ status: status || undefined, q: q || undefined, from: from || undefined, to: to || undefined, page, size: 25 }),
+    queryKey: ['admin-bookings', propertyId, status, q, from, to, page],
+    queryFn: () => adminApi.bookings({ propertyId, status: status || undefined, q: q || undefined, from: from || undefined, to: to || undefined, page, size: 25 }),
     placeholderData: keepPreviousData,
   });
   const retry = useMutation({
@@ -60,7 +62,7 @@ export default function AdminBookingsPage() {
                 <tr key={b.id}>
                   <td className={td}><Link to={`/account/bookings/${b.id}`} className="font-mono font-semibold text-gold-700 hover:underline">{b.reference}</Link><span className="block text-xs text-ink-500">{formatDateTime(b.createdAt)}</span></td>
                   <td className={td}>{b.primaryGuest?.fullName}<span className="block text-xs text-ink-500">{b.customerEmail}</span></td>
-                  <td className={td}>{b.room.roomNumber}<span className="block text-xs text-ink-500">{b.room.typeName}</span></td>
+                  <td className={td}>{b.room.roomNumber}<span className="block text-xs text-ink-500">{b.room.typeName}{b.room.propertyName ? ` · ${b.room.propertyName}` : ''}</span></td>
                   <td className={td}>{formatDate(b.checkIn, 'd MMM')} – {formatDate(b.checkOut, 'd MMM yy')}<span className="block text-xs text-ink-500">{b.guests} guest(s)</span></td>
                   <td className={`${td} tabular-nums`}>{formatMoney(b.price?.total, b.price?.currency, 0)}{b.refundAmount !== null && <span className="block text-xs text-ink-500">refund {formatMoney(b.refundAmount, b.price?.currency, 0)}</span>}</td>
                   <td className={td}><BookingStatusBadge status={b.status} />{b.statusReason && b.status !== 'CONFIRMED' && <span className="mt-1 block max-w-40 text-xs text-ink-500">{humanize(b.statusReason.split(':')[0])}</span>}</td>

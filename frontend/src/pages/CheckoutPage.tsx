@@ -171,7 +171,7 @@ export default function CheckoutPage() {
           <RoomVisual room={room.data} className="aspect-[16/9] w-full" />
           <div className="p-6">
             <h2 className="text-2xl">{room.data.name}</h2>
-            <p className="text-sm text-ink-500">{room.data.roomType.name} · Room {room.data.roomNumber}</p>
+            <p className="text-sm text-ink-500">{room.data.property ? `${room.data.property.name} · ` : ''}{room.data.roomType.name} · Room {room.data.roomNumber}</p>
             <ul className="mt-4 space-y-2 text-sm text-ink-700">
               <li className="flex items-center gap-2"><CalendarDays className="size-4 text-gold-600" aria-hidden /> {formatDate(checkIn)} → {formatDate(checkOut)}</li>
               <li className="flex items-center gap-2"><Users className="size-4 text-gold-600" aria-hidden /> {guests} guest{guests > 1 ? 's' : ''}</li>

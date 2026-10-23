@@ -4,14 +4,17 @@ import { AdminHeader, StatTile, td, th } from '../../components/admin/AdminUi';
 import { Alert } from '../../components/ui/Alert';
 import { ErrorState, LoadingBlock } from '../../components/ui/States';
 import { adminApi } from '../../lib/api/endpoints';
+import { useAdminProperty } from '../../lib/adminProperty';
 import { hotelToday, plusDays } from '../../lib/dates';
 import { bookingStatusLabel, formatDate, formatMoney, formatPercent, paymentStatusLabel } from '../../lib/format';
 import { BookingTrendChart, ChartCard, HorizontalBars, OccupancyChart } from './charts';
 
 export default function AdminOverviewPage() {
   const today = hotelToday();
-  const inventory = useQuery({ queryKey: ['admin', 'inventory-summary'], queryFn: adminApi.inventorySummary });
-  const occupancy = useQuery({ queryKey: ['admin', 'occupancy', today], queryFn: () => adminApi.occupancy(today, plusDays(today, 30)) });
+  const { propertyId, properties } = useAdminProperty();
+  const scope = properties.find((p) => p.id === propertyId);
+  const inventory = useQuery({ queryKey: ['admin', 'inventory-summary', propertyId], queryFn: () => adminApi.inventorySummary(propertyId) });
+  const occupancy = useQuery({ queryKey: ['admin', 'occupancy', today, propertyId], queryFn: () => adminApi.occupancy(today, plusDays(today, 30), propertyId) });
   const bookings = useQuery({ queryKey: ['admin', 'booking-summary'], queryFn: adminApi.bookingSummary });
   const payments = useQuery({ queryKey: ['admin', 'payment-summary'], queryFn: adminApi.paymentSummary });
 
@@ -27,7 +30,7 @@ export default function AdminOverviewPage() {
 
   return (
     <>
-      <AdminHeader title="Operational overview" description={`Live figures from the room, booking and payment services · ${formatDate(today)} (hotel time)`} />
+      <AdminHeader title="Operational overview" description={`${scope ? `${scope.name}, ${scope.city}` : 'All hotels'} · rooms and occupancy for this selection; booking and payment totals cover the whole portfolio · ${formatDate(today)}`} />
       {bk.needsAttention > 0 && (
         <Alert tone="error" title={`${bk.needsAttention} booking(s) need attention`} className="mb-6">
           A compensation step (refund or release) could not complete automatically. Review them under Bookings → “Under review”.

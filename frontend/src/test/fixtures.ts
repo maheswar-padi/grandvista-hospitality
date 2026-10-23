@@ -1,15 +1,22 @@
-import type { Booking, Payment, QuoteResponse, Room } from '../lib/api/types';
+import type { Booking, Payment, Property, QuoteResponse, ReconciliationReport, Room } from '../lib/api/types';
 import { hotelToday, plusDays } from '../lib/dates';
 
 export const checkIn = plusDays(hotelToday(), 20);
 export const checkOut = plusDays(checkIn, 2);
 
+export const hotels: Property[] = [
+  { id: 'p-hyd', code: 'HYD', name: 'GrandVista Hyderabad', city: 'Hyderabad', country: 'IN', timeZone: 'Asia/Kolkata', active: true, totalRooms: 11, activeRooms: 11, createdAt: '2026-10-01T00:00:00Z', version: 0 },
+  { id: 'p-goa', code: 'GOA', name: 'GrandVista Goa', city: 'Goa', country: 'IN', timeZone: 'Asia/Kolkata', active: true, totalRooms: 4, activeRooms: 4, createdAt: '2026-10-01T00:00:00Z', version: 0 },
+  { id: 'p-dxb', code: 'DXB', name: 'GrandVista Dubai', city: 'Dubai', country: 'AE', timeZone: 'Asia/Dubai', active: true, totalRooms: 4, activeRooms: 4, createdAt: '2026-10-01T00:00:00Z', version: 0 },
+];
+
 export const room: Room = {
   id: 'room-1',
+  property: { id: 'p-hyd', code: 'HYD', name: 'GrandVista Hyderabad', city: 'Hyderabad', country: 'IN', timeZone: 'Asia/Kolkata' },
   roomNumber: '201',
   name: 'Deluxe King, City View',
   description: 'Floor-to-ceiling windows over the skyline.',
-  roomType: { id: 't-1', code: 'DELUXE', name: 'Deluxe Room', description: null, sortOrder: 2 },
+  roomType: { id: 't-1', propertyId: 'p-hyd', code: 'DELUXE', name: 'Deluxe Room', description: null, sortOrder: 2 },
   maxOccupancy: 3,
   bedConfiguration: '1 King bed',
   sizeSqM: 32,
@@ -62,7 +69,7 @@ export function booking(status: Booking['status'], extra: Partial<Booking> = {})
     reference: 'GV-7KQ2MX',
     status,
     statusReason: null,
-    room: { id: 'room-1', roomNumber: '201', name: room.name, typeName: 'Deluxe Room' },
+    room: { id: 'room-1', roomNumber: '201', name: room.name, typeName: 'Deluxe Room', propertyId: 'p-hyd', propertyName: 'GrandVista Hyderabad' },
     checkIn,
     checkOut,
     nights: 2,
@@ -90,3 +97,31 @@ export function payment(status: Payment['status'], extra: Partial<Payment> = {})
     expiresAt: new Date(Date.now() + 600_000).toISOString(), createdAt: '2026-10-21T10:00:00Z', updatedAt: '2026-10-21T10:00:00Z', ...extra,
   };
 }
+
+export const reconciliationReport: ReconciliationReport = {
+  id: 'run-1',
+  propertyId: 'p-goa',
+  propertyCode: 'GOA',
+  propertyName: 'GrandVista Goa',
+  trigger: 'MANUAL',
+  status: 'COMPLETED',
+  startedAt: '2026-10-23T10:00:00Z',
+  finishedAt: '2026-10-23T10:00:01Z',
+  actor: 'user:u-1',
+  allocationsChecked: 4,
+  bookingsChecked: 3,
+  findingCount: 2,
+  releasedCount: 1,
+  countsByType: {
+    ORPHAN_HOLD: 1,
+    ALLOCATION_WITHOUT_BOOKING: 0,
+    STATUS_MISMATCH: 0,
+    CONFIRMED_BOOKING_WITHOUT_ALLOCATION: 1,
+    PENDING_BOOKING_WITHOUT_HOLD: 0,
+  },
+  error: null,
+  findings: [
+    { type: 'CONFIRMED_BOOKING_WITHOUT_ALLOCATION', severity: 'CRITICAL', action: 'NONE', bookingId: 'b-9', bookingReference: 'GV-ABC123', allocationId: null, roomId: 'r-1', roomNumber: null, checkIn: '2026-11-10', checkOut: '2026-11-12', allocationStatus: null, bookingStatus: 'CONFIRMED', detail: 'confirmed booking has no allocation' },
+    { type: 'ORPHAN_HOLD', severity: 'WARNING', action: 'RELEASE_EXPIRED_ORPHAN_HOLD', bookingId: 'b-8', bookingReference: null, allocationId: 'a-8', roomId: 'r-2', roomNumber: '202', checkIn: '2026-11-01', checkOut: '2026-11-03', allocationStatus: 'HELD', bookingStatus: null, detail: 'hold for a booking that does not exist' },
+  ],
+};

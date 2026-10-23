@@ -18,6 +18,8 @@ import type {
   RazorpayCheckoutResult,
   PaymentSummary,
   PricingPolicy,
+  Property,
+  ReconciliationReport,
   QuoteResponse,
   Role,
   Room,
@@ -42,6 +44,8 @@ export const authApi = {
 
 // ---------------- rooms ----------------
 export interface RoomSearchParams {
+  propertyId?: string;
+  city?: string;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
@@ -62,8 +66,14 @@ export const roomsApi = {
     request<QuoteResponse>(`/rooms/${id}/quote`, { query: { checkIn, checkOut, guests } }),
   calendar: (id: string, from: string, days = 90) =>
     request<CalendarResponse>(`/rooms/${id}/calendar`, { query: { from, days } }),
-  roomTypes: () => request<RoomType[]>('/room-types'),
+  roomTypes: (propertyId?: string) => request<RoomType[]>('/room-types', { query: { propertyId } }),
   amenities: () => request<Amenity[]>('/amenities'),
+};
+
+// ---------------- properties (hotels) ----------------
+export const propertiesApi = {
+  list: () => request<Property[]>('/properties'),
+  get: (id: string) => request<Property>(`/properties/${id}`),
 };
 
 // ---------------- bookings ----------------
@@ -130,12 +140,21 @@ export interface RoomBody {
 }
 
 export const adminApi = {
-  inventorySummary: () => request<InventorySummary>('/admin/inventory/summary'),
-  occupancy: (from: string, to: string) => request<OccupancyPoint[]>('/admin/inventory/occupancy', { query: { from, to } }),
+  // `propertyId` undefined = the whole portfolio where the backend supports it, otherwise the default hotel
+  properties: () => request<Property[]>('/admin/properties'),
+  inventorySummary: (propertyId?: string) => request<InventorySummary>('/admin/inventory/summary', { query: { propertyId } }),
+  occupancy: (from: string, to: string, propertyId?: string) =>
+    request<OccupancyPoint[]>('/admin/inventory/occupancy', { query: { from, to, propertyId } }),
+  reconciliation: (propertyId?: string) =>
+    request<ReconciliationReport>('/admin/inventory/reconciliation', { query: { propertyId } }),
+  reconciliationRuns: (propertyId?: string, limit = 10) =>
+    request<ReconciliationReport[]>('/admin/inventory/reconciliation/runs', { query: { propertyId, limit } }),
+  runReconciliation: (propertyId?: string) =>
+    request<ReconciliationReport>('/admin/inventory/reconciliation/run', { method: 'POST', query: { propertyId } }),
   bookingSummary: () => request<BookingSummary>('/admin/bookings/summary'),
   paymentSummary: () => request<PaymentSummary>('/admin/payments/summary'),
 
-  rooms: (params: { status?: RoomStatus; q?: string; page?: number; size?: number }) =>
+  rooms: (params: { propertyId?: string; status?: RoomStatus; q?: string; page?: number; size?: number }) =>
     request<Page<Room>>('/admin/rooms', { query: params }),
   room: (id: string) => request<Room>(`/admin/rooms/${id}`),
   createRoom: (body: RoomBody) => request<Room>('/admin/rooms', { method: 'POST', body }),
@@ -150,12 +169,12 @@ export const adminApi = {
   deleteImage: (roomId: string, imageId: string) =>
     request<void>(`/admin/rooms/${roomId}/images/${imageId}`, { method: 'DELETE' }),
 
-  activePolicy: () => request<PricingPolicy>('/admin/pricing/policy'),
-  policies: () => request<PricingPolicy[]>('/admin/pricing/policies'),
-  publishPolicy: (body: Omit<PricingPolicy, 'id' | 'version' | 'status' | 'createdBy' | 'createdAt'>) =>
-    request<PricingPolicy>('/admin/pricing/policies', { method: 'POST', body }),
+  activePolicy: (propertyId?: string) => request<PricingPolicy>('/admin/pricing/policy', { query: { propertyId } }),
+  policies: (propertyId?: string) => request<PricingPolicy[]>('/admin/pricing/policies', { query: { propertyId } }),
+  publishPolicy: (body: Omit<PricingPolicy, 'id' | 'propertyId' | 'version' | 'status' | 'createdBy' | 'createdAt'>, propertyId?: string) =>
+    request<PricingPolicy>('/admin/pricing/policies', { method: 'POST', body, query: { propertyId } }),
 
-  bookings: (params: { status?: BookingStatus; from?: string; to?: string; q?: string; page?: number; size?: number }) =>
+  bookings: (params: { propertyId?: string; status?: BookingStatus; from?: string; to?: string; q?: string; page?: number; size?: number }) =>
     request<Page<Booking>>('/admin/bookings', { query: params }),
   retryCompensation: (id: string) => request<Booking>(`/admin/bookings/${id}/retry-compensation`, { method: 'POST' }),
 

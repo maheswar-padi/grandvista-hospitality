@@ -7,9 +7,10 @@ import { SearchBar } from '../components/rooms/SearchBar';
 import { Button } from '../components/ui/Button';
 import { EmptyState, ErrorState } from '../components/ui/States';
 import { Pagination } from '../components/ui/Pagination';
-import { roomsApi, type RoomSearchParams } from '../lib/api/endpoints';
+import { propertiesApi, roomsApi, type RoomSearchParams } from '../lib/api/endpoints';
 import { ApiError } from '../lib/api/http';
 import { defaultStay } from '../lib/dates';
+import { describeDestination, uniqueRoomTypes } from '../lib/destinations';
 import { formatDate } from '../lib/format';
 
 const sorts: Array<{ value: NonNullable<RoomSearchParams['sort']>; label: string }> = [
@@ -26,6 +27,8 @@ export default function SearchPage() {
   const fallback = defaultStay();
 
   const criteria: RoomSearchParams = {
+    propertyId: params.get('propertyId') ?? undefined,
+    city: params.get('city') ?? undefined,
     checkIn: params.get('checkIn') ?? undefined,
     checkOut: params.get('checkOut') ?? undefined,
     guests: params.get('guests') ? Number(params.get('guests')) : undefined,
@@ -43,7 +46,14 @@ export default function SearchPage() {
     queryFn: ({ signal }) => roomsApi.search(criteria, signal),
     placeholderData: keepPreviousData,
   });
-  const types = useQuery({ queryKey: ['room-types'], queryFn: roomsApi.roomTypes, staleTime: 300_000 });
+  const types = useQuery({
+    queryKey: ['room-types', criteria.propertyId],
+    queryFn: () => roomsApi.roomTypes(criteria.propertyId),
+    staleTime: 300_000,
+    select: uniqueRoomTypes,
+  });
+  const properties = useQuery({ queryKey: ['properties'], queryFn: propertiesApi.list, staleTime: 300_000 });
+  const where = describeDestination({ propertyId: criteria.propertyId, city: criteria.city }, properties.data ?? []);
   const amenities = useQuery({ queryKey: ['amenities'], queryFn: roomsApi.amenities, staleTime: 300_000 });
 
   const update = (changes: Record<string, string | string[] | undefined>) => {
@@ -70,6 +80,10 @@ export default function SearchPage() {
     stayQuery.set('checkOut', criteria.checkOut);
   }
   if (criteria.guests) stayQuery.set('guests', String(criteria.guests));
+  // "clear filters" keeps the stay and the destination
+  const keepQuery = new URLSearchParams(stayQuery);
+  if (criteria.propertyId) keepQuery.set('propertyId', criteria.propertyId);
+  if (criteria.city) keepQuery.set('city', criteria.city);
   const dated = !!(criteria.checkIn && criteria.checkOut);
   const validationError = results.error instanceof ApiError && results.error.status === 400 ? results.error : null;
 
@@ -125,13 +139,13 @@ export default function SearchPage() {
           ))}
         </div>
       </fieldset>
-      <Button variant="ghost" size="sm" onClick={() => setParams(new URLSearchParams(stayQuery))}>Clear filters</Button>
+      <Button variant="ghost" size="sm" onClick={() => setParams(new URLSearchParams(keepQuery))}>Clear filters</Button>
     </div>
   );
 
   return (
     <div className="container-page py-10">
-      <h1 className="text-4xl sm:text-5xl">Rooms &amp; suites</h1>
+      <h1 className="text-4xl sm:text-5xl">{where ? `Rooms in ${where}` : 'Rooms & suites'}</h1>
       <p className="mt-2 text-ink-600">
         {dated
           ? `Showing rooms available from ${formatDate(criteria.checkIn)} to ${formatDate(criteria.checkOut)}${criteria.guests ? ` for ${criteria.guests} guest${criteria.guests > 1 ? 's' : ''}` : ''}.`
@@ -139,9 +153,15 @@ export default function SearchPage() {
       </p>
       <div className="mt-6">
         <SearchBar
-          key={`${criteria.checkIn}-${criteria.checkOut}-${criteria.guests}`}
-          defaults={{ checkIn: criteria.checkIn ?? fallback.checkIn, checkOut: criteria.checkOut ?? fallback.checkOut, guests: criteria.guests ?? 2 }}
-          onSearch={(v) => update({ checkIn: v.checkIn, checkOut: v.checkOut, guests: String(v.guests) })}
+          key={`${criteria.checkIn}-${criteria.checkOut}-${criteria.guests}-${criteria.propertyId}-${criteria.city}`}
+          withDestination
+          defaults={{
+            checkIn: criteria.checkIn ?? fallback.checkIn,
+            checkOut: criteria.checkOut ?? fallback.checkOut,
+            guests: criteria.guests ?? 2,
+            destination: { propertyId: criteria.propertyId, city: criteria.city },
+          }}
+          onSearch={(v, d) => update({ checkIn: v.checkIn, checkOut: v.checkOut, guests: String(v.guests), propertyId: d.propertyId, city: d.city, roomType: undefined })}
         />
       </div>
 
@@ -173,7 +193,7 @@ export default function SearchPage() {
               {Array.from({ length: 6 }, (_, i) => <RoomCardSkeleton key={i} />)}
             </div>
           ) : results.data.content.length === 0 ? (
-            <EmptyState title="No rooms match your search" action={<Button variant="secondary" onClick={() => setParams(new URLSearchParams(stayQuery))}>Clear filters</Button>}>
+            <EmptyState title="No rooms match your search" action={<Button variant="secondary" onClick={() => setParams(new URLSearchParams(keepQuery))}>Clear filters</Button>}>
               {dated ? 'Every matching room is booked for these dates. Try different dates or fewer filters.' : 'Try removing some filters.'}
             </EmptyState>
           ) : (

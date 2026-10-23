@@ -23,6 +23,7 @@ const AdminPricingPage = lazy(() => import('./pages/admin/AdminPricingPage'));
 const AdminBookingsPage = lazy(() => import('./pages/admin/AdminBookingsPage'));
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
+const AdminReconciliationPage = lazy(() => import('./pages/admin/AdminReconciliationPage'));
 
 export const router = createBrowserRouter([
   {
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
           { path: 'pricing', element: <AdminPricingPage /> },
           { path: 'bookings', element: <AdminBookingsPage /> },
           { path: 'payments', element: <AdminPaymentsPage /> },
+          { path: 'reconciliation', element: <AdminReconciliationPage /> },
           { path: 'users', element: <RequireAuth roles={['ADMIN']}><AdminUsersPage /></RequireAuth> },
         ],
       },

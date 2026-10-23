@@ -77,7 +77,7 @@ export default function ConfirmationPage() {
 
         <dl className="mt-10 grid gap-6 border-t border-ink-100 pt-8 sm:grid-cols-2">
           <div><dt className="eyebrow">Booking reference</dt><dd className="mt-1 font-mono text-2xl font-semibold tracking-wider">{b.reference}</dd></div>
-          <div><dt className="eyebrow">Room</dt><dd className="mt-1">{b.room.name}<span className="block text-sm text-ink-500">{b.room.typeName} · Room {b.room.roomNumber}</span></dd></div>
+          <div><dt className="eyebrow">Room</dt><dd className="mt-1">{b.room.name}<span className="block text-sm text-ink-500">{b.room.propertyName ? `${b.room.propertyName} · ` : ''}{b.room.typeName} · Room {b.room.roomNumber}</span></dd></div>
           <div><dt className="eyebrow">Check-in</dt><dd className="mt-1">{formatDate(b.checkIn)}<span className="block text-sm text-ink-500">from 14:00</span></dd></div>
           <div><dt className="eyebrow">Check-out</dt><dd className="mt-1">{formatDate(b.checkOut)}<span className="block text-sm text-ink-500">until 11:00</span></dd></div>
           <div><dt className="eyebrow">Guests</dt><dd className="mt-1">{b.guests} · lead guest {b.primaryGuest?.fullName}</dd></div>

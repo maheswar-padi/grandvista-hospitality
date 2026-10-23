@@ -89,7 +89,7 @@ export default function BookingDetailPage() {
           <section className="card p-6" aria-labelledby="stay-heading">
             <h2 id="stay-heading" className="text-2xl">Your stay</h2>
             <dl className="mt-4 grid gap-5 sm:grid-cols-2">
-              <div><dt className="eyebrow">Room</dt><dd className="mt-1">{b.room.name}<span className="block text-sm text-ink-500">{b.room.typeName} · Room {b.room.roomNumber}</span></dd></div>
+              <div><dt className="eyebrow">Room</dt><dd className="mt-1">{b.room.name}<span className="block text-sm text-ink-500">{b.room.propertyName ? `${b.room.propertyName} · ` : ''}{b.room.typeName} · Room {b.room.roomNumber}</span></dd></div>
               <div><dt className="eyebrow">Dates</dt><dd className="mt-1">{formatDate(b.checkIn)} → {formatDate(b.checkOut)}<span className="block text-sm text-ink-500">{b.nights} night{b.nights > 1 ? 's' : ''}</span></dd></div>
               <div><dt className="eyebrow">Guests</dt><dd className="mt-1">{b.guests}</dd></div>
               <div><dt className="eyebrow">Lead guest</dt><dd className="mt-1">{b.primaryGuest?.fullName}<span className="block text-sm text-ink-500">{b.primaryGuest?.email}</span></dd></div>
