@@ -24,8 +24,8 @@ Last updated 23 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Containers & runtime (verified on Docker 29.9, 4 GB VM)
 - [x] 7 images rebuilt (multi-stage, non-root); `docker compose config` valid
-- [x] 8 containers healthy; 5 applications UP in Eureka
-- [x] `scripts/e2e-smoke.sh` — 52/52 checks passed (also 52/52 with two room-service instances)
+- [x] 19 containers healthy (21 with `--profile observability`); 7 applications / 10 instances UP in Eureka (gateway, discovery and booking ×2) — counted 23 Oct 2026
+- [x] `scripts/e2e-smoke.sh` — 70/70 checks passed (23 Oct); earlier 52/52 also with two room-service instances
 - [x] Load balancing with 2 room-service instances: gateway 30/30, booking→room 4/4 ([evidence](testing/evidence/load-balancing.txt))
 - [x] Load test (20 VUs, 30 s, limits temporarily raised then restored to 10/300): 1,119 req/s, p95 search 47 ms /
       quote 32 ms, 0 errors; 10 concurrent bookings → 1 accepted, 9 refused

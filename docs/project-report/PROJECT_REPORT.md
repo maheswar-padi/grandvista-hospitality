@@ -58,7 +58,7 @@ separate PostgreSQL server. Double booking is prevented by a PostgreSQL exclusio
 every remote step is idempotent so retries and duplicate messages are harmless. Eureka, the gateway and the
 booking service run as two instances each, protected by Resilience4j circuit breakers and retries. A React and
 TypeScript web application provides the customer journey and an administration dashboard. The system is packaged
-with Docker Compose (23 containers). Verification comprises 214 automated backend tests (88.6 % line coverage)
+with Docker Compose (19 containers). Verification comprises 214 automated backend tests (88.6 % line coverage)
 using real PostgreSQL, RabbitMQ and Mailpit through Testcontainers, 34 frontend tests, a 70-check end-to-end test
 on the running stack, a failover test that kills a gateway, a Eureka server and a booking replica, and a k6 load
 test in which 10 simultaneous booking attempts for the same room produced exactly one reservation.
@@ -213,7 +213,7 @@ TanStack Query 5, React Hook Form, Zod 4, Tailwind CSS 4, Recharts 3; JUnit 5, M
 Testing Library, axe-core, JaCoCo 0.8.13, k6 1.1; Docker Compose; GitHub Actions (configured).
 
 **Minimum to run the stack:** a 64-bit machine with Docker and about 4 GB of memory available to Docker (measured
-use ≈ 3 GB for 23 containers).
+use ≈ 2.7 GB (2 694 MiB) for the 19 containers, `docker stats`, 23 Oct 2026).
 
 ## 10. Technology selection and justification
 
@@ -236,8 +236,9 @@ use ≈ 3 GB for 23 containers).
 ## 11. System architecture
 
 The system has seven Spring Boot applications (gateway, discovery server, five business services) deployed as
-11 containers (two Eureka servers, two gateways, two booking replicas), a static frontend and a gateway load
-balancer served by nginx, RabbitMQ, Mailpit and five PostgreSQL servers — 23 containers in total. Communication:
+10 containers (two Eureka servers, two gateways, two booking replicas, one each of auth, room, payment and
+notification), a static frontend and a gateway load balancer served by nginx, RabbitMQ, Mailpit and five PostgreSQL
+servers — 19 containers in total (21 with the optional Prometheus and Grafana). Communication:
 
 * **Synchronous** REST over HTTP with explicit timeouts (gateway connect 1 s / response 15 s; booking → room and
   payment connect 2 s, read 5–8 s), Resilience4j retries (3 attempts, exponential backoff with jitter, transient
@@ -494,7 +495,7 @@ results and commands: `docs/testing/TESTING.md`; raw outputs: `docs/testing/evid
 
 ## 22. Deployment architecture
 
-Seven Docker images (multi-stage builds, non-root runtime users, health checks) run as 23 containers in one Compose
+Seven Docker images (multi-stage builds, non-root runtime users, health checks) run as 19 containers in one Compose
 project on a private network: two Eureka servers, two gateways behind an nginx load balancer, auth, room, two
 booking replicas, payment and notification services, five PostgreSQL servers (one per service), RabbitMQ, Mailpit
 and the web application. Only the web application (3000) and the load balancer (8080) are published; databases,
@@ -546,7 +547,7 @@ for up to 15 minutes after logout, per-instance rate limiting — are listed in 
 | Frontend | 13 page modules plus the administration area (about 20 client-side routes), typed API client, design system |
 | Automated tests | 214 backend + 34 frontend |
 | Scripts | environment generator, reset, end-to-end test, DB isolation check, failover demo, consistency audit, Node and k6 load tests, coverage summary, deploy |
-| Containers | 23 (25 with the optional Prometheus/Grafana profile) |
+| Containers | 19 (21 with the optional Prometheus/Grafana profile), counted with `docker compose ps -q` on 23 Oct 2026 |
 
 ## 25. Results and screenshots
 

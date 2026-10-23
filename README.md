@@ -38,7 +38,7 @@ stack uses ≈ 3 GB), `openssl`, `curl` and `jq` (for the test scripts).
 ```
 
 It creates `.env` (random secrets, never printed, git-ignored) and the JWT key pair if they are missing, builds
-and starts all 23 containers, waits until every one is healthy, and prints the URLs below. The first build takes
+and starts all 19 containers (21 with `--observability`), waits until every one is healthy, and prints the URLs below. The first build takes
 several minutes. Then check the whole platform end to end (70 checks, about a minute):
 
 ```bash
@@ -68,7 +68,7 @@ Open **http://localhost:3000**. Other useful commands:
 | **Events & e-mail** | RabbitMQ topic exchange with transactional outboxes in booking and payment services, publisher confirms, per-consumer queues with dead-letter queues and retries; notification-service sends HTML e-mails (confirmation, payment receipt, cancellation, failed payment, expired hold), suppressing duplicates when an event is redelivered; captured locally by Mailpit |
 | **Payments** | Explicit state machine, provider interface with two gateways — simulated (default) and Razorpay test mode (server-created orders, Checkout, signature + server-side verification, capture, signed webhooks, refunds, automatic refund of late captures) — idempotent charges, HMAC-signed timestamped webhooks with de-duplication, refunds (partial/full), reconciliation of timed-out charges, transactional outbox to the booking service |
 | **Security** | RS256 JWT (JWKS), rotating refresh tokens in an HttpOnly SameSite=Strict cookie with reuse detection, BCrypt, account lockout, gateway rate limiting, CORS allow-list, roles (CUSTOMER / STAFF / ADMIN / SERVICE), ownership checks returning 404, service-to-service client credentials, no public admin creation |
-| **Platform** | Two Spring Cloud Gateways behind nginx, two peered Eureka servers, client-side load balancing, Resilience4j circuit breakers/retries, correlation IDs end-to-end, RFC 9457 problem responses, health/readiness probes, Prometheus metrics, Flyway migrations, one PostgreSQL server per service, Docker Compose (23 containers), optional Prometheus + Grafana, GitHub Actions CI |
+| **Platform** | Two Spring Cloud Gateways behind nginx, two peered Eureka servers, client-side load balancing, Resilience4j circuit breakers/retries, correlation IDs end-to-end, RFC 9457 problem responses, health/readiness probes, Prometheus metrics, Flyway migrations, one PostgreSQL server per service, Docker Compose (19 containers; 21 with the optional Prometheus + Grafana profile), GitHub Actions CI |
 | **Web app** | React + TypeScript: home, search, room details with live quote, register/sign-in, checkout, simulated payment, live confirmation, customer dashboard, booking details & cancellation, admin dashboard with charts, rooms editor, pricing, bookings, payments, users |
 
 ## Architecture

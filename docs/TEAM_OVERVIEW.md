@@ -41,7 +41,7 @@ money ever moves.
 
 **Stack:** Java 21, Spring Boot 3.5, Spring Cloud 2025.0 (Gateway, Eureka, LoadBalancer), Resilience4j, Spring
 Security (JWT), JPA + Flyway, PostgreSQL 16, RabbitMQ 4.1, Thymeleaf; React 19, TypeScript, Vite, Tailwind;
-JUnit 5, Testcontainers, JaCoCo, Vitest, k6; Docker Compose (23 containers); GitHub Actions.
+JUnit 5, Testcontainers, JaCoCo, Vitest, k6; Docker Compose (19 containers, 21 with Prometheus + Grafana); GitHub Actions.
 
 ## 3. How to run it
 

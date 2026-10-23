@@ -5,6 +5,13 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Container counts corrected (23 Oct 2026)
+- **Fixed:** "23 containers" (and "25 with observability", "8", "11") replaced by measured numbers. Counted with
+  `docker compose ps -q | wc -l`: **19** containers for the default stack, **21** with `--profile observability`;
+  10 of them are Spring Boot instances; Eureka lists 7 applications / 10 instances UP; the 19 containers use
+  2 694 MiB (`docker stats`). Updated README, TEAM_OVERVIEW (md + pdf), traceability matrix, report, checklist and
+  DEPLOYMENT.md.
+
 ### Multi-property portfolio and stock reconciliation (23 Oct 2026)
 - **Added (room-service):** `Property` entity (code, name, city, country, time zone, active) with migration V3; every
   room type, room and pricing policy belongs to a property; room numbers and type codes unique per property; 3 demo

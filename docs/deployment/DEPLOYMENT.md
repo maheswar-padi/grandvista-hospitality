@@ -26,7 +26,7 @@ keeps existing files; `--force` regenerates everything (then reset the database,
 ```bash
 docker compose up -d --build
 ```
-Builds 7 images (multi-stage; the Maven and npm caches make rebuilds fast) and starts 8 containers. Start order is
+Builds 7 images (multi-stage; the Maven and npm caches make rebuilds fast) and starts 19 containers (21 with `--profile observability`). Start order is
 enforced by health checks:
 
 ```mermaid
@@ -167,7 +167,7 @@ Let's Encrypt) — see "Local test of the production overlay" below.
 
 | Option | Verdict |
 |---|---|
-| **Oracle Cloud Always Free — Ampere A1 VM** (up to 4 OCPU / 24 GB RAM, free indefinitely) | **Recommended.** The only free option with enough memory for the whole stack (~3 GB measured, 23 containers); runs the same Docker Compose files, so nothing changes in the code. Trade-offs: sign-up needs a card for identity verification; free A1 capacity is sometimes temporarily unavailable in a region; you operate the VM (updates, backups). |
+| **Oracle Cloud Always Free — Ampere A1 VM** (up to 4 OCPU / 24 GB RAM, free indefinitely) | **Recommended.** The only free option with enough memory for the whole stack (~2.7 GB measured for the 19 containers); runs the same Docker Compose files, so nothing changes in the code. Trade-offs: sign-up needs a card for identity verification; free A1 capacity is sometimes temporarily unavailable in a region; you operate the VM (updates, backups). |
 | AWS EC2 / Google Cloud free tier (1 GB RAM) | too small for 11 JVMs + 5 PostgreSQL servers + RabbitMQ |
 | Render / Railway / Fly.io free plans | per-service memory limits and no free multi-database/broker setup for 20+ containers |
 | Managed containers (Azure Container Apps, ECS Fargate, Cloud Run) + managed PostgreSQL | production-grade but not free; see "Production-grade alternative" |
