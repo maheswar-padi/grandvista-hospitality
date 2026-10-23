@@ -99,8 +99,12 @@ export function contend(data) {
 
 export function handleSummary(data) {
   const out = __ENV.SUMMARY_DIR || '/out';
+  // Never write the test customers' access tokens into the published evidence file.
+  const setup = data.setup_data ? { ...data.setup_data } : undefined;
+  if (setup) delete setup.tokens;
+  const safe = { ...data, setup_data: setup };
   return {
-    [`${out}/k6-summary.json`]: JSON.stringify(data, null, 2),
+    [`${out}/k6-summary.json`]: JSON.stringify(safe, null, 2),
     stdout: textSummary(data),
   };
 }
