@@ -96,11 +96,21 @@ CHECK_IN=$(date_plus "$OFFSET")
 CHECK_OUT=$(date_plus $((OFFSET + 2)))
 check "search with dates succeeds" "200" "$(http GET "/rooms?checkIn=$CHECK_IN&checkOut=$CHECK_OUT&guests=2&size=50" "")"
 ROOM_ID=$(field '.content[0].id')
+ROOM_PROPERTY=$(field '.content[0].property.id')
 AVAILABLE_BEFORE=$(field '[.content[].id] | length')
 echo "  stay $CHECK_IN → $CHECK_OUT, room $ROOM_ID ($AVAILABLE_BEFORE rooms available)"
 check "results carry a dynamic stay price" "2" "$(field '.content[0].stayPrice.nights')"
 check "invalid range is rejected" "400" "$(http GET "/rooms?checkIn=$CHECK_OUT&checkOut=$CHECK_IN" "")"
 check "invalid range has problem code" "INVALID_DATE_RANGE" "$(field .code)"
+
+section "1b. Hotel portfolio (multi-property)"
+check "hotel list is public" "200" "$(http GET /properties "")"
+check "  ... three demo hotels" "3" "$(field 'length')"
+check "  ... in three cities" "3" "$(field '[.[].city] | unique | length')"
+DXB_ID=$(field '.[] | select(.code == "DXB") | .id')
+check "search by city returns only that city" "true" "$(http GET "/rooms?city=Goa&checkIn=$CHECK_IN&checkOut=$CHECK_OUT&size=50" "" >/dev/null; jq '(.content | length) > 0 and all(.content[]; .property.city == "Goa")' "$WORK/body")"
+check "search by hotel returns only that hotel" "true" "$(http GET "/rooms?propertyId=$DXB_ID&size=50" "" >/dev/null; jq '(.content | length) > 0 and all(.content[]; .property.code == "DXB")' "$WORK/body")"
+check "  ... priced in the hotel's own time zone" "Asia/Dubai" "$(field '.content[0].property.timeZone')"
 
 section "2. Registration, login and session refresh"
 JAR_A="$WORK/a.cookies"
@@ -128,6 +138,7 @@ PAYMENT_ID=$(field .paymentId)
 REF_A=$(field .reference)
 check "booking awaits payment" "PENDING_PAYMENT" "$(field .status)"
 check "price snapshot stored" "$TOTAL" "$(field .price.total)"
+check "booking records its hotel" "$ROOM_PROPERTY" "$(field .room.propertyId)"
 check "retry with same key returns the same booking" "200" "$(http POST /bookings "$BOOKING_BODY" "$TOKEN_A" -H "Idempotency-Key: $KEY")"
 check "  ... same id" "$BOOKING_ID" "$(field .id)"
 http GET "/rooms?checkIn=$CHECK_IN&checkOut=$CHECK_OUT&guests=2&size=50" "" >/dev/null
@@ -209,6 +220,17 @@ if [[ -n "$ADMIN_EMAIL" && -n "$ADMIN_PASSWORD" ]]; then
   check "maintenance room not offered" "false" "$(jq --arg id "$OTHER_ROOM" '[.content[].id] | index($id) != null' "$WORK/body")"
   check "room back to active" "ACTIVE" "$(http PUT "/admin/rooms/$OTHER_ROOM/status" '{"status":"ACTIVE"}' "$ADMIN" >/dev/null; field .room.status)"
   check "nobody can edit payment outcomes" "403" "$(http PUT "/admin/payments/$P2" '{"status":"SUCCEEDED"}' "$ADMIN")"
+  check "bookings can be filtered by hotel" "true" "$(http GET "/admin/bookings?propertyId=$ROOM_PROPERTY&size=100" "" "$ADMIN" >/dev/null; jq --arg p "$ROOM_PROPERTY" '(.content | length) > 0 and all(.content[]; .room.propertyId == $p)' "$WORK/body")"
+
+  section "11. Stock reconciliation (room allocations vs bookings)"
+  check "customer cannot run a reconciliation" "403" "$(http POST "/admin/inventory/reconciliation/run?propertyId=$ROOM_PROPERTY" "" "$TOKEN_A")"
+  check "reconciliation runs for the booked hotel" "200" "$(http POST "/admin/inventory/reconciliation/run?propertyId=$ROOM_PROPERTY" "" "$ADMIN")"
+  RUN_ID=$(field .id)
+  check "  ... completes (booking-service reached with a service token)" "COMPLETED" "$(field .status)"
+  check "  ... checked this run's allocations" "true" "$(jq '.allocationsChecked >= 0 and (.findingCount == (.findings | length))' "$WORK/body")"
+  echo "  report: $(jq -c '{allocationsChecked, bookingsChecked, findingCount, releasedCount}' "$WORK/body")"
+  check "latest report is the run just made" "$RUN_ID" "$(http GET "/admin/inventory/reconciliation?propertyId=$ROOM_PROPERTY" "" "$ADMIN" >/dev/null; field .id)"
+  check "run history lists it" "true" "$(http GET "/admin/inventory/reconciliation/runs?propertyId=$ROOM_PROPERTY" "" "$ADMIN" >/dev/null; jq --arg id "$RUN_ID" '[.[].id] | index($id) != null' "$WORK/body")"
 else
   red "  (skipped: GV_BOOTSTRAP_ADMIN_EMAIL/PASSWORD not found in .env)"
 fi
