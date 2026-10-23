@@ -52,7 +52,7 @@ Common codes: `VALIDATION_FAILED` (400), `AUTHENTICATION_REQUIRED` (401), `ACCES
 | Route id | Path predicates | Target (default) |
 |---|---|---|
 | `auth` | `/api/v1/auth/**`, `/api/v1/admin/users/**` | `lb://auth-service` |
-| `rooms` | `/api/v1/rooms/**`, `/api/v1/room-types/**`, `/api/v1/amenities/**`, `/api/v1/media/**`, `/api/v1/admin/rooms/**`, `/api/v1/admin/room-types/**`, `/api/v1/admin/amenities/**`, `/api/v1/admin/pricing/**`, `/api/v1/admin/inventory/**` | `lb://room-service` |
+| `rooms` | `/api/v1/properties`, `/api/v1/properties/**`, `/api/v1/admin/properties`, `/api/v1/admin/properties/**`, `/api/v1/rooms/**`, `/api/v1/room-types/**`, `/api/v1/amenities/**`, `/api/v1/media/**`, `/api/v1/admin/rooms/**`, `/api/v1/admin/room-types/**`, `/api/v1/admin/amenities/**`, `/api/v1/admin/pricing/**`, `/api/v1/admin/inventory/**` | `lb://room-service` |
 | `bookings` | `/api/v1/bookings`, `/api/v1/bookings/**`, `/api/v1/admin/bookings/**` | `lb://booking-service` |
 | `payments` | `/api/v1/payments/**`, `/api/v1/admin/payments/**` | `lb://payment-service` |
 | `notifications` | `/api/v1/admin/notifications` | `lb://notification-service` |
@@ -90,34 +90,54 @@ The `roles` field of the registration request is ignored — every self-register
 
 | Method | Path | Purpose | Role | Notes / success | Important failures |
 |---|---|---|---|---|---|
-| GET | `/rooms` | Search rooms | public | query: `checkIn, checkOut, guests, roomType, minPrice, maxPrice, amenities (repeatable), sort (RECOMMENDED, PRICE_ASC, PRICE_DESC, CAPACITY_DESC, NAME_ASC), page, size≤50`. With dates only rooms free for the whole stay are returned, each with `stayPrice` | 400 `INVALID_DATE_RANGE`, `CHECK_IN_IN_PAST`, `STAY_TOO_LONG` (> 30 nights), `BOOKING_WINDOW_EXCEEDED` (> 365 days), `INVALID_PRICE_RANGE` |
+| GET | `/properties` | Active hotels of the portfolio | public | list of `{id, code, name, city, country, timeZone, active, totalRooms, activeRooms, createdAt, version}` sorted by name | — |
+| GET | `/properties/{propertyId}` | One active hotel | public | `Property` | 404 `PROPERTY_NOT_FOUND` (also for inactive hotels) |
+| GET | `/admin/properties` | All hotels incl. inactive | STAFF, ADMIN | list | 403 |
+| GET | `/admin/properties/{propertyId}` | One hotel | STAFF, ADMIN | `Property` | 404 |
+| POST | `/admin/properties` | Create a hotel; its pricing policy v1 is a copy of the default hotel's active policy | ADMIN | `{code (2–10 A–Z/0–9), name, city, country (ISO 3166-1 alpha-2), timeZone (IANA), active?}` → 201 | 409 `PROPERTY_CODE_TAKEN`, 422 `INVALID_TIME_ZONE` |
+| PUT | `/admin/properties/{propertyId}` | Rename, move, change time zone, (de)activate | ADMIN | same body; `code` cannot change | 422 `PROPERTY_CODE_IMMUTABLE`, `INVALID_TIME_ZONE` |
+| GET | `/rooms` | Search rooms | public | query: `propertyId, city` (case-insensitive) to choose the hotel(s), `checkIn, checkOut, guests, roomType, minPrice, maxPrice, amenities (repeatable), sort (RECOMMENDED, PRICE_ASC, PRICE_DESC, CAPACITY_DESC, NAME_ASC), page, size≤50`. With dates only rooms free for the whole stay are returned, each with `stayPrice` | 400 `INVALID_DATE_RANGE`, `CHECK_IN_IN_PAST`, `STAY_TOO_LONG` (> 30 nights), `BOOKING_WINDOW_EXCEEDED` (> 365 days), `INVALID_PRICE_RANGE` |
 | GET | `/rooms/{roomId}` | Room details | public | 200 `Room` | 404 `ROOM_NOT_FOUND` (also for retired rooms) |
 | GET | `/rooms/{roomId}/availability?checkIn&checkOut` | Free for the whole stay? | public | `{available, reason}` (`ROOM_MAINTENANCE`, `BOOKED_FOR_SELECTED_DATES`, …) | 400 date errors |
 | GET | `/rooms/{roomId}/calendar?from&days≤120` | Unavailable nights | public | `{unavailableNights: [dates]}` — no booking identities | 400 |
 | GET | `/rooms/{roomId}/quote?checkIn&checkOut&guests` | Itemised dynamic price | public | `{available, unavailableReason, quote: PriceQuote}` | 422 `GUEST_COUNT_EXCEEDS_CAPACITY`, 400 dates |
-| GET | `/room-types` | Room types | public | list | — |
+| GET | `/room-types?propertyId` | Room types (each belongs to one hotel; codes repeat across hotels) | public | list incl. `propertyId` | — |
 | GET | `/amenities` | Amenities | public | list | — |
 | GET | `/media/{key}` | Room image | public | binary, `Cache-Control: public, max-age=2592000, immutable`, `nosniff` | 404 (also for any malformed / traversal key) |
-| GET | `/admin/rooms?status&q&page&size` | All rooms, any status | STAFF, ADMIN | page of `Room` | 403 |
+| GET | `/admin/rooms?propertyId&status&q&page&size` | All rooms, any status | STAFF, ADMIN | page of `Room` | 403 |
 | GET | `/admin/rooms/{roomId}` | Room in any status | STAFF, ADMIN | `Room` | 404 |
-| POST | `/admin/rooms` | Create room | ADMIN | `RoomRequest` → 201 | 409 `ROOM_NUMBER_TAKEN`, 422 `UNKNOWN_AMENITY`/`UNKNOWN_ROOM_TYPE` |
+| POST | `/admin/rooms` | Create room (in the hotel of its room type) | ADMIN | `RoomRequest` → 201 | 409 `ROOM_NUMBER_TAKEN` (numbers are unique per hotel), 422 `UNKNOWN_AMENITY`/`UNKNOWN_ROOM_TYPE`, `ROOM_TYPE_OTHER_PROPERTY` |
 | PUT | `/admin/rooms/{roomId}` | Update details / base rate | ADMIN | `RoomRequest` incl. current `version` | 409 `CONCURRENT_MODIFICATION`, 422 `ROOM_NUMBER_IMMUTABLE` |
 | PUT | `/admin/rooms/{roomId}/status` | ACTIVE / MAINTENANCE / OUT_OF_SERVICE / INACTIVE | STAFF, ADMIN | `{status, reason}` → `{room, futureConfirmedStays, warning}` | 409 `ROOM_HAS_UPCOMING_STAYS` (retiring a room with stays) |
 | POST | `/admin/rooms/{roomId}/images` | Upload photo (multipart `file`, `altText`) | ADMIN | 201 image; JPEG/PNG/WebP detected by content, ≤ 5 MB, ≤ 10 per room | 415 `UNSUPPORTED_IMAGE_TYPE`, 413 `FILE_TOO_LARGE`, 422 `TOO_MANY_IMAGES` |
 | DELETE | `/admin/rooms/{roomId}/images/{imageId}` | Delete photo | ADMIN | 204 | 404 `IMAGE_NOT_FOUND` |
-| POST / PUT | `/admin/room-types`, `/admin/room-types/{id}` | Manage room types | ADMIN | 201 / 200 | 409 / 422 |
+| POST / PUT | `/admin/room-types`, `/admin/room-types/{id}` | Manage room types; `propertyId` in the body (default hotel when omitted) | ADMIN | 201 / 200 | 409 `ROOM_TYPE_CODE_TAKEN` (per hotel) / 422 `ROOM_TYPE_PROPERTY_IMMUTABLE` |
 | POST / PUT | `/admin/amenities`, `/admin/amenities/{id}` | Manage amenities | ADMIN | 201 / 200 | 409 / 422 |
-| GET | `/admin/pricing/policy` | Active pricing policy | STAFF, ADMIN | `PricingPolicy` | — |
-| GET | `/admin/pricing/policies` | All versions | STAFF, ADMIN | list, newest first | — |
-| POST | `/admin/pricing/policies` | Publish a new version | ADMIN | `PolicyRequest` → 201 | 422 `OVERLAPPING_SEASONS`, `MISSING_BASE_DEMAND_TIER`, `DUPLICATE_DEMAND_TIER`, `INVALID_PRICE_LIMITS`; 400 ranges |
-| GET | `/admin/inventory/summary` | Rooms by status, occupancy tonight, arrivals/departures | STAFF, ADMIN | `InventorySummary` | — |
-| GET | `/admin/inventory/occupancy?from&to` | Hotel-wide occupancy per night | STAFF, ADMIN | list | 400 range > 366 days |
-| GET | `/admin/inventory/allocations?roomId&status&from&to&page&size` | Holds / allocations | STAFF, ADMIN | page | — |
-| GET | `/admin/inventory/events?roomId&bookingId&page&size` | Inventory audit trail | STAFF, ADMIN | page | — |
-| POST | `/internal/v1/holds` | Place a hold and price it (idempotent per `bookingId`) | SERVICE | `{bookingId, roomId, checkIn, checkOut, guests}` → 201 `HoldResponse` | 409 `ROOM_UNAVAILABLE`, `ROOM_NOT_AVAILABLE`, `HOLD_MISMATCH`, `HOLD_IN_PROGRESS`; 422 capacity |
+| GET | `/admin/pricing/policy?propertyId` | Active pricing policy of a hotel (default hotel when omitted) | STAFF, ADMIN | `PricingPolicy` incl. `propertyId` | 404 `PROPERTY_NOT_FOUND` |
+| GET | `/admin/pricing/policies?propertyId` | All versions of a hotel's policy | STAFF, ADMIN | list, newest first | — |
+| POST | `/admin/pricing/policies?propertyId` | Publish a new version for that hotel (versions are numbered per hotel) | ADMIN | `PolicyRequest` → 201 | 422 `OVERLAPPING_SEASONS`, `MISSING_BASE_DEMAND_TIER`, `DUPLICATE_DEMAND_TIER`, `INVALID_PRICE_LIMITS`; 400 ranges |
+| GET | `/admin/inventory/summary?propertyId` | Rooms by status, occupancy tonight, arrivals/departures (one hotel, or the whole portfolio when omitted) | STAFF, ADMIN | `InventorySummary` | — |
+| GET | `/admin/inventory/occupancy?propertyId&from&to` | Occupancy per night (one hotel or the portfolio) | STAFF, ADMIN | list | 400 range > 366 days |
+| GET | `/admin/inventory/allocations?propertyId&roomId&status&from&to&page&size` | Holds / allocations | STAFF, ADMIN | page | — |
+| GET | `/admin/inventory/events?roomId&bookingId&page&size` | Inventory audit trail (incl. `RECONCILIATION_RUN`, `RECONCILIATION_FINDING`, `RECONCILIATION_RELEASED`, `PROPERTY_CREATED`, `PROPERTY_UPDATED`) | STAFF, ADMIN | page | — |
+| POST | `/admin/inventory/reconciliation/run?propertyId` | Reconcile one hotel now: allocations vs booking-service bookings; releases expired orphan holds | STAFF, ADMIN | 200 `ReconciliationReport` (also when `status` is `FAILED` because the booking-service could not be reached) | 409 `RECONCILIATION_RUNNING` (another instance is reconciling this hotel), 404 `PROPERTY_NOT_FOUND` |
+| GET | `/admin/inventory/reconciliation?propertyId` | Latest report of a hotel, with findings | STAFF, ADMIN | `ReconciliationReport` | 404 `RECONCILIATION_NOT_RUN` |
+| GET | `/admin/inventory/reconciliation/runs?propertyId&limit≤100` | Recent runs, newest first (findings omitted) | STAFF, ADMIN | list | — |
+| POST | `/internal/v1/holds` | Place a hold and price it (idempotent per `bookingId`); dates are checked in the hotel's time zone | SERVICE | `{bookingId, roomId, checkIn, checkOut, guests}` → 201 `HoldResponse` (incl. `propertyId, propertyName, propertyCity, propertyTimeZone`) | 409 `ROOM_UNAVAILABLE`, `ROOM_NOT_AVAILABLE` (reason `PROPERTY_INACTIVE` for a deactivated hotel), `HOLD_MISMATCH`, `HOLD_IN_PROGRESS`; 422 capacity |
 | GET | `/internal/v1/holds/{bookingId}` | Hold state | SERVICE | `HoldResponse` | 404 |
 | POST | `/internal/v1/holds/{bookingId}/confirm` | Confirm after payment (re-acquires an expired hold if still free) | SERVICE | `HoldResponse` | 409 `INVENTORY_NO_LONGER_AVAILABLE`, `HOLD_RELEASED` |
 | POST | `/internal/v1/holds/{bookingId}/release` | Release (idempotent; unknown booking = no-op) | SERVICE | `{reason}` → 204 | — |
+
+`ReconciliationReport`: `{id, propertyId, propertyCode, propertyName, trigger (SCHEDULED|MANUAL), status
+(COMPLETED|FAILED), startedAt, finishedAt, actor, allocationsChecked, bookingsChecked, findingCount, releasedCount,
+countsByType {ORPHAN_HOLD, ALLOCATION_WITHOUT_BOOKING, STATUS_MISMATCH, CONFIRMED_BOOKING_WITHOUT_ALLOCATION,
+PENDING_BOOKING_WITHOUT_HOLD}, error, findings [{type, severity (WARNING|CRITICAL), action
+(NONE|RELEASE_EXPIRED_ORPHAN_HOLD), bookingId, bookingReference, allocationId, roomId, roomNumber, checkIn, checkOut,
+allocationStatus, bookingStatus, detail}]}`. Finding rules: a HELD allocation whose booking is unknown or finished
+(expired, cancelled, failed, rejected) is an **orphan hold** — released automatically once its hold has expired; a
+CONFIRMED allocation without a booking, a booking/room status disagreement, a CONFIRMED booking without an active
+allocation and a PENDING_PAYMENT booking without a hold are reported for review. Records changed in the last 2 minutes
+(a saga in flight) are skipped. The scheduled job (`GV_RECONCILIATION_INTERVAL`, default 10 min) runs every active hotel.
 
 ### 3.3 booking-service
 
@@ -130,12 +150,14 @@ The `roles` field of the registration request is ignored — every self-register
 | GET | `/bookings/{id}/history` | Status history (audit trail) | owner, STAFF, ADMIN | list of `{fromStatus, toStatus, reason, actor, occurredAt}` | 404 |
 | GET | `/bookings/{id}/cancellation-quote` | Refund the policy would give now | owner, STAFF, ADMIN | `{allowed, refundPercent, refundAmount, daysBeforeCheckIn, rule}` | 404 |
 | POST | `/bookings/{id}/cancel` | Cancel (policy refund; staff on a guest booking = full refund) | owner, STAFF, ADMIN | `{reason?}` → 200 `CANCELLED` (202 while `CANCELLATION_PENDING`) | 409 `CANCELLATION_WINDOW_CLOSED`, `PAYMENT_IN_PROGRESS`, `PAYMENT_ALREADY_COMPLETED`, `BOOKING_NOT_CANCELLABLE` |
-| GET | `/admin/bookings?status&from&to&q&page&size` | Search bookings | STAFF, ADMIN | page | — |
+| GET | `/admin/bookings?propertyId&status&from&to&q&page&size` | Search bookings (optionally of one hotel) | STAFF, ADMIN | page | — |
 | GET | `/admin/bookings/summary` | Counts, confirmed value, arrivals, 30-day trend | STAFF, ADMIN | `BookingSummary` | — |
 | POST | `/admin/bookings/{id}/retry-compensation` | Retry a failed refund/release | ADMIN | `Booking` | 409 `NOT_NEEDING_ATTENTION` |
+| POST | `/internal/v1/bookings/lookup` | Booking facts for reconciliation | SERVICE | `{bookingIds: [≤1000]}` → list of `{bookingId, reference, status, roomId, propertyId, checkIn, checkOut, holdExpiresAt, updatedAt}` (unknown ids absent; no guest or payment data) | 400 > 1000 ids |
+| POST | `/internal/v1/bookings/holding-inventory` | Bookings that should hold a room (PENDING_PAYMENT, CONFIRMED) on these rooms, stay ending after `checkOutFrom` | SERVICE | `{roomIds: [≤1000], checkOutFrom}` → same list shape | 400 |
 | POST | `/internal/v1/payment-events` | Apply a payment event (idempotent by `eventId`) | SERVICE | `PaymentEventMessage` → `{result: APPLIED\|DUPLICATE\|IGNORED}` | 503 when a dependency is down (the outbox retries) |
 
-`Booking` fields: `id, reference (GV-XXXXXX), status, statusReason, room {id, roomNumber, name, typeName}, checkIn,
+`Booking` fields: `id, reference (GV-XXXXXX), status, statusReason, room {id, roomNumber, name, typeName, propertyId, propertyName}, checkIn,
 checkOut, nights, guests, primaryGuest, specialRequests, price {nights, subtotal, serviceFee, taxes, total, currency,
 pricingPolicyVersion, quotedAt, nightlyRates[]}, paymentId, holdExpiresAt, refundAmount, allowedActions [PAY, CANCEL],
 createdAt, confirmedAt, cancelledAt, customerId, customerEmail`.

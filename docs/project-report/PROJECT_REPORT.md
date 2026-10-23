@@ -13,11 +13,11 @@
 
 ### Team Members
 
-| # | Name | Register number |
+| # | Name | Role |
 |---|---|---|
-| 1 | PADI SESHA MAHESWARA RAO | `[to be completed]` |
-| 2 | `[Member 2]` | `[to be completed]` |
-| 3 | `[Member 3]` | `[to be completed]` |
+| 1 | KOONI BHAVYA SREE | Team Lead |
+| 2 | CHUNCHU PURVI SATHVIKA | Member |
+| 3 | PADI SESHA MAHESWARA RAO | Member |
 
 ### Review Schedule
 
@@ -29,8 +29,7 @@
 
 > Note on this document: it describes the software as implemented and tested in the accompanying repository.
 > No approvals, signatures, certificates, faculty remarks or deployment evidence are claimed. Places where the
-> team must add institutional details, team members or screenshots are marked `[to be completed]`, `[Member n]` or
-> `[Screenshot: …]`.
+> team must add institutional details or screenshots are marked `[to be completed]` or `[Screenshot: …]`.
 
 ---
 
@@ -48,7 +47,7 @@
 
 Hotel reservation systems must keep room inventory consistent while many customers search, reserve and pay at
 the same time, and while payment providers answer asynchronously or not at all. This project designs and
-implements **GrandVista Hospitality**, a reservation platform for a fictional hotel, as a set of independently
+implements **GrandVista Hospitality**, a reservation platform for a fictional portfolio of hotels, as a set of independently
 deployable Spring Boot microservices behind a Spring Cloud API gateway with Eureka service discovery. A room
 service owns inventory, availability and a deterministic dynamic-pricing engine; a booking service orchestrates
 each reservation as a saga across the room and payment services; a payment service implements a payment state
@@ -59,8 +58,8 @@ separate PostgreSQL server. Double booking is prevented by a PostgreSQL exclusio
 every remote step is idempotent so retries and duplicate messages are harmless. Eureka, the gateway and the
 booking service run as two instances each, protected by Resilience4j circuit breakers and retries. A React and
 TypeScript web application provides the customer journey and an administration dashboard. The system is packaged
-with Docker Compose (23 containers). Verification comprises 196 automated backend tests (86.4 % line coverage)
-using real PostgreSQL, RabbitMQ and Mailpit through Testcontainers, 29 frontend tests, a 56-check end-to-end test
+with Docker Compose (23 containers). Verification comprises 214 automated backend tests (88.6 % line coverage)
+using real PostgreSQL, RabbitMQ and Mailpit through Testcontainers, 34 frontend tests, a 70-check end-to-end test
 on the running stack, a failover test that kills a gateway, a Eureka server and a booking replica, and a k6 load
 test in which 10 simultaneous booking attempts for the same room produced exactly one reservation.
 
@@ -91,7 +90,12 @@ authentication and administration across independently deployable services, such
 3. a customer is never charged without a reservation, and a reservation is never confirmed without payment;
 4. retries, duplicate messages, timeouts and temporary service outages do not corrupt state;
 5. only authorised users can see or change data, and administrators cannot alter payment outcomes;
-6. the whole system can be started, tested and demonstrated on a single computer.
+6. the whole system can be started, tested and demonstrated on a single computer;
+7. GrandVista operates a **global property portfolio**: several hotels in different cities and time zones, each
+   with its own rooms, room types, pricing and inventory, searchable together or per city or hotel;
+8. inventory is kept under control across the portfolio (the problem statement's "multi-warehouse inventory control
+   and stock reconciliation"): every hotel's room allocations are regularly reconciled against the bookings, and
+   mismatches are detected, repaired where safe and recorded.
 
 ## 4. Objectives
 
@@ -106,6 +110,10 @@ authentication and administration across independently deployable services, such
 9. Package the system with Docker Compose and document deployment, security and operation.
 10. Deliver domain events through a message broker and notify customers by e-mail without duplicates.
 11. Keep the system available when one instance of the gateway, the discovery server or the booking service fails.
+12. Model the hotel portfolio: every room type, room and pricing policy belongs to one property; search, availability,
+    pricing and administration work per property and per city.
+13. Reconcile each property's inventory against bookings on a schedule and on demand, release expired orphan holds
+    automatically and keep every action in the inventory audit trail.
 
 ## 5. Limitations of existing systems
 
@@ -176,6 +184,9 @@ flowchart LR
 | F11 | View operational dashboards: occupancy, bookings, payments; search bookings and payments |
 | F12 | Manage users' roles and account status |
 | F13 | Receive e-mails: booking confirmation, payment receipt, cancellation, failed payment, expired hold |
+| F14 | Choose a destination (all hotels, a city or one hotel) when searching; see the hotel on every room and booking |
+| F15 | Administer hotels (create, rename, change time zone, deactivate) and filter every admin screen by hotel |
+| F16 | Run and review a stock-reconciliation report per hotel; expired orphan holds are released automatically |
 
 ## 8. Non-functional requirements
 
@@ -265,7 +276,11 @@ per service; the service's non-superuser role does not exist on the other server
 * `bookings`: unique `(customer_id, idempotency_key)`; `booking_price_snapshots.total = subtotal + fee + taxes`.
 * `payments`: unique `booking_id`; `refunded_amount <= amount`; unique `(payment_id, idempotency_key)` on attempts;
   unique provider event id on webhook receipts.
-* `pricing_policies`: partial unique index guaranteeing exactly one active policy.
+* `pricing_policies`: partial unique index guaranteeing exactly one active policy **per property**.
+* `properties` (migration V3): code unique; `room_types` unique `(property_id, code)`; `rooms` unique
+  `(property_id, room_number)` and a composite foreign key `(room_type_id, property_id)` so a room can only use a room
+  type of its own hotel.
+* `inventory_reconciliation_runs` (migration V4): one row per run per property with the findings as JSONB.
 
 **Figure 2 — Room-service entities (excerpt)**
 
@@ -319,6 +334,53 @@ through a media-storage abstraction (local file system in development); uploads 
 content is JPEG, PNG or WebP, up to 5 MB, with server-generated file names. Administrators change status under a
 row lock; retiring a room with upcoming confirmed stays is refused. Every catalogue and inventory change is
 written to an audit table.
+
+### 16.1 Multi-property portfolio
+
+GrandVista is modelled as a portfolio of hotels. A `Property` (code, name, city, ISO country, IANA time zone, active
+flag) owns its room types, rooms and pricing-policy versions; the migration `V3__properties.sql` moved the existing
+single hotel into the first property (Hyderabad) without changing any identifier, and the demo seeder adds two more
+(Goa, India and Dubai, UAE), giving 3 hotels in 3 cities and 2 time zones. Room numbers and room-type codes are
+unique per hotel; a composite foreign key guarantees that a room's type belongs to the same hotel. Search accepts a
+`propertyId` or a `city`; availability, quotes and the calendar validate stay dates in the hotel's own time zone
+(`StayRules.validate(checkIn, checkOut, zone)`), and each hotel prices with its own active policy. A deactivated hotel
+disappears from search and refuses new holds (`PROPERTY_INACTIVE`) but keeps its existing bookings. Holds return the
+hotel, so every booking stores `property_id` and `property_name` (booking migration V3) and e-mails name the hotel.
+Administrators create and edit hotels (`/admin/properties`); every admin view — rooms, inventory, occupancy, pricing,
+bookings — takes a `propertyId` filter, and the web app has a global hotel selector in the admin menu and a
+destination selector (all hotels, a city or one hotel) in the search bar. Tests: `PropertyPortfolioIntegrationTest`
+(4), `CatalogueAdminIntegrationTest` (per-property seeding), gateway route test, booking/notification tests for the
+stored hotel, `portfolio.test.tsx` (frontend) and e2e section 1b.
+
+### 16.2 Stock reconciliation (multi-warehouse inventory control)
+
+Each hotel is treated like a warehouse whose stock (room-nights) is recorded twice: as **allocations** in the
+room-service and as **bookings** in the booking-service. Messages can be lost, a compensation can fail, or an
+operator can intervene by hand, so the two records can drift apart. `InventoryReconciliationService` compares them per
+hotel. It loads the hotel's HELD and CONFIRMED allocations for current and future stays, asks the booking-service
+(new internal endpoints `/internal/v1/bookings/lookup` and `/holding-inventory`, called with a `room-service`
+client-credentials token) for the matching bookings, and classifies every mismatch with the pure, unit-tested
+`ReconciliationEngine`:
+
+| Finding | Meaning | Severity | Action |
+|---|---|---|---|
+| `ORPHAN_HOLD` | room HELD for a booking that does not exist or has finished (expired, cancelled, failed, rejected) | warning | released automatically once the hold has expired |
+| `ALLOCATION_WITHOUT_BOOKING` | room CONFIRMED for a booking that does not exist | critical | reported (never auto-released) |
+| `STATUS_MISMATCH` | booking cancelled but room still confirmed, or booking confirmed but room only held | critical | reported |
+| `CONFIRMED_BOOKING_WITHOUT_ALLOCATION` | paid booking without an active room allocation | critical | reported |
+| `PENDING_BOOKING_WITHOUT_HOLD` | booking awaiting payment, before its hold expiry, without a hold | warning | reported |
+
+Records changed in the last two minutes are skipped, so a saga in progress is never reported. Only one instance
+reconciles a hotel at a time (a PostgreSQL transaction-scoped advisory lock). Each run is stored
+(`inventory_reconciliation_runs`) and written to the inventory audit trail as `RECONCILIATION_RUN`; a finding is
+logged as `RECONCILIATION_FINDING` the first time it appears (not again on every run), and each release as
+`RECONCILIATION_RELEASED` with release reason `RECONCILIATION_ORPHAN_HOLD`. If the booking-service cannot be
+reached the run is stored as `FAILED` and nothing is changed. A scheduled job reconciles every active hotel
+(default every 10 minutes); staff and administrators can run it on demand and read the latest report and the run
+history (`/admin/inventory/reconciliation`), shown in the dashboard's *Reconciliation* page. Tests:
+`ReconciliationEngineTest` (9), `InventoryReconciliationIntegrationTest` (3, real PostgreSQL, booking-service
+mocked), `reconciliationLookupsReturnBookingFactsToServicesOnly` (booking-service), `portfolio.test.tsx` and e2e
+section 11 (live run with the real service token).
 
 ## 17. Dynamic pricing
 
@@ -409,14 +471,14 @@ RabbitMQ events); Razorpay tests against a fake Razorpay API; frontend unit, com
 and live tests on the Docker stack (end-to-end, consistency audit, failover, k6 load test, browser and responsive
 inspection). Code coverage is measured with JaCoCo.
 
-**Measured results (21–22 October 2026, one Apple Silicon laptop):**
+**Measured results (21–23 October 2026, one Apple Silicon laptop):**
 
 | Activity | Result |
 |---|---|
-| Backend `mvn -B clean verify` | **196 tests, 0 failures, 0 errors, 0 skipped** |
-| Code coverage (JaCoCo aggregate) | **86.4 % of lines (3 871 / 4 479), 65.8 % of branches (952 / 1 447)** |
-| Frontend lint, type check, tests, build | passed; **29 tests** (incl. axe accessibility checks) |
-| End-to-end smoke test | **56/56** checks (incl. 4 e-mails verified in Mailpit), on the high-availability stack |
+| Backend `mvn -B clean verify` (23 Oct) | **214 tests, 0 failures, 0 errors, 0 skipped** |
+| Code coverage (JaCoCo aggregate, 23 Oct) | **88.6 % of lines (4 385 / 4 951), 67.7 % of branches (1 125 / 1 661)** |
+| Frontend lint, type check, tests, build | passed; **34 tests** (incl. axe accessibility checks) |
+| End-to-end smoke test (23 Oct) | **70/70** checks (incl. 4 e-mails verified in Mailpit, hotel portfolio §1b and a live reconciliation run §11), on the high-availability stack |
 | Database isolation check | 40/40 (five PostgreSQL servers, no cross-service roles) |
 | Failover (kill one gateway, one Eureka, one booking replica) | run A 99/100 requests + 4/4 bookings; run B 100/100 + 4/4 |
 | k6 load test (ramp to 20 virtual users, 55 s, 0.2 s think time) | 7 275 requests (120.9 req/s), 0 % errors; search median 17.6 ms / p95 135.9 ms; quote median 10.6 ms / p95 60.8 ms |
@@ -477,11 +539,11 @@ for up to 15 minutes after logout, per-instance rate limiting — are listed in 
 | Part | Size |
 |---|---|
 | Backend | 7 Spring Boot applications (gateway, discovery, auth, room, booking, payment, notification) + 1 shared library, Java 21 |
-| Database migrations | 8 Flyway migrations across 5 databases |
+| Database migrations | 12 Flyway migrations across 5 databases |
 | REST handler methods | 67 (57 public, 10 internal service-to-service) |
 | Domain events | 6 event types on RabbitMQ, 2 consumer queues with dead-letter queues |
 | Frontend | 13 page modules plus the administration area (about 20 client-side routes), typed API client, design system |
-| Automated tests | 196 backend + 29 frontend |
+| Automated tests | 214 backend + 34 frontend |
 | Scripts | environment generator, reset, end-to-end test, DB isolation check, failover demo, consistency audit, Node and k6 load tests, coverage summary, deploy |
 | Containers | 23 (25 with the optional Prometheus/Grafana profile) |
 
@@ -544,7 +606,9 @@ contains no fabricated images). The numbers match the capture guide in `docs/DEM
 4. Redis-backed rate limiting shared by the gateways; replicas of the remaining services; RabbitMQ quorum queues;
    PostgreSQL replication and automated backups.
 5. Distributed tracing (OpenTelemetry) alongside the existing correlation IDs.
-6. Room-type inventory with overbooking control, multi-property support, demand forecasting for pricing.
+6. Room-type inventory with overbooking control, demand forecasting for pricing.
+7. Per-hotel currencies (all hotels currently price in INR), per-hotel staff permissions, and the booking-service's
+   cancellation-policy calendar in each hotel's time zone (it currently uses one configured zone).
 
 ## 27. Conclusion
 

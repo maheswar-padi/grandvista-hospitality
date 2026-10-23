@@ -5,6 +5,29 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Multi-property portfolio and stock reconciliation (23 Oct 2026)
+- **Added (room-service):** `Property` entity (code, name, city, country, time zone, active) with migration V3; every
+  room type, room and pricing policy belongs to a property; room numbers and type codes unique per property; 3 demo
+  hotels (Hyderabad 11 rooms, Goa 4, Dubai 4); search by `propertyId` or `city`; stay dates validated in the hotel's
+  time zone; per-hotel pricing policies; `/properties` (public) and `/admin/properties` (ADMIN writes); every admin
+  view filterable by `propertyId`; holds return the hotel.
+- **Added (booking, notification):** bookings store `property_id`/`property_name` (booking V3); booking events and
+  e-mails carry the hotel (notification V2); `/admin/bookings?propertyId`.
+- **Added (stock reconciliation):** `ReconciliationEngine` + `InventoryReconciliationService` compare each hotel's
+  allocations with the booking-service's bookings (new SERVICE-only `/internal/v1/bookings/lookup` and
+  `/holding-inventory`, called with a new `room-service` client credential `ROOM_SERVICE_CLIENT_SECRET`); flags orphan
+  holds, allocations without booking, status mismatches, confirmed bookings without allocation and pending bookings
+  without hold; releases expired orphan holds; audit events `RECONCILIATION_RUN/FINDING/RELEASED`; runs stored
+  (room V4); scheduled job (default 10 min) and `/admin/inventory/reconciliation[/run|/runs]` (STAFF, ADMIN).
+- **Added (frontend):** destination selector (all, city, hotel) on home and search; hotel on room cards, room page,
+  checkout, confirmation and bookings; hotel list on the home page; admin hotel selector; Reconciliation page.
+- **Changed:** report team table (names and roles, no register numbers), report §3/§4/§7/§13, new §16.1–16.2,
+  future work; README; API reference; traceability matrix §0 (PS016 lines); TEAM_OVERVIEW.
+- **Verified:** `mvn -B clean verify` 214 backend tests, 0 failures; coverage 88.6 % lines (4 385 / 4 951), 67.7 %
+  branches (1 125 / 1 661); frontend 34 tests, lint, type check, build; e2e 70/70 on the rebuilt stack.
+- **Limitations:** all hotels price in INR; staff are not restricted per hotel; the booking-service cancellation
+  calendar uses one configured zone.
+
 ### Public release and team overview (23 Oct 2026)
 - **Security:** full-history scan before publishing found 10 expired JWT access tokens of throwaway k6 test
   customers in `docs/testing/evidence/k6-summary.json` (local issuer, CUSTOMER role, expired 22 Oct 16:22 UTC). Removed

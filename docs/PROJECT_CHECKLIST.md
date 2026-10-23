@@ -1,7 +1,7 @@
 # Implementation checklist
 
 `[x]` = done **and** verified by the evidence named · `[~]` = implemented, not fully verified · `[ ]` = not done.
-Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TESTING.md).
+Last updated 23 October 2026. Full results: [docs/testing/TESTING.md](testing/TESTING.md).
 
 ## Backend (verified: `mvn -B clean verify` — 148 tests, 0 failures, 0 errors, 0 skipped; Testcontainers PostgreSQL 16)
 - [x] platform-commons (correlation IDs, RFC 9457 errors, JWT wiring, service clients, retry, Specs) — 6 tests
@@ -61,9 +61,15 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 ## Report, demo and polish (Phase 8, 22 Oct 2026)
 - [x] k6 load test (evidence/k6-output.txt), diagrams PNG, report/README/demo script/traceability updated
 - [x] Report title page: name, Team Members table, Review Schedule (23 Oct 2026)
-- [ ] Register numbers, members 2–3, department, guide, academic year, review dates, institutional pages, screenshots (need the team)
-- [x] GitHub repository (private) + CI green (run 39832912584) + badge
+- [x] Team table: KOONI BHAVYA SREE (Team Lead), CHUNCHU PURVI SATHVIKA, PADI SESHA MAHESWARA RAO (names and roles)
+- [ ] Department, guide, academic year, review dates, institutional pages, screenshots (need the team)
+- [x] GitHub repository (public) + CI green (run 39832912584) + badge
 - [ ] Razorpay test keys; cloud account + domain (need the student)
+
+## Multi-property and stock reconciliation (23 Oct 2026)
+- [x] Property entity, 3 demo hotels, search/pricing/admin per hotel, bookings store the hotel (`PropertyPortfolioIntegrationTest`, e2e §1b)
+- [x] Reconciliation job + admin report per hotel, expired orphan holds released, audit trail (`ReconciliationEngineTest`, `InventoryReconciliationIntegrationTest`, e2e §11)
+- [x] Backend 214 tests, coverage 88.6 % lines / 67.7 % branches; frontend 34 tests
 
 ## Defects found and fixed
 - Earlier phase: CHAR vs VARCHAR schema mismatches · text-block SQL concatenation (room search) · GiST

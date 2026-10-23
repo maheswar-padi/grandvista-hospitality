@@ -7,9 +7,11 @@
 
 [![CI](https://github.com/maheswar-padi/grandvista-hospitality/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/maheswar-padi/grandvista-hospitality/actions/workflows/ci.yml)
 
-A microservices hotel-booking platform: customers search live availability, see a transparent dynamic price,
+A microservices hotel-booking platform for a **portfolio of hotels** (3 demo hotels: Hyderabad, Goa and Dubai):
+customers search live availability by city or hotel, see a transparent dynamic price,
 reserve a room (which is **held** for 15 minutes), pay, and receive an authoritative confirmation and e-mails.
-Hotel staff manage inventory, room status, pricing policy, bookings and payments from an administration dashboard.
+Hotel staff manage each hotel's inventory, room status, pricing policy, bookings and payments from an administration
+dashboard, and a **stock reconciliation** job checks every hotel's room allocations against the bookings.
 
 The interesting part is the **distributed booking workflow** — a saga across independently deployed services with
 idempotent steps, compensations, transactional outboxes, RabbitMQ events and a database-level guarantee that a room
@@ -58,6 +60,8 @@ Open **http://localhost:3000**. Other useful commands:
 
 | Area | What is implemented |
 |---|---|
+| **Hotel portfolio** | Hotels (properties) with city, country and time zone; every room type, room and pricing policy belongs to one hotel; 3 demo hotels in 3 cities; search by city or hotel; stay dates validated in the hotel's time zone; per-hotel pricing; admin create/edit/deactivate; every admin screen filterable by hotel; bookings and e-mails record the hotel |
+| **Stock reconciliation** | Scheduled (every 10 min) and on-demand reconciliation per hotel: allocations vs confirmed/pending bookings; flags orphan holds, allocations without booking, status mismatches, confirmed bookings without room and pending bookings without hold; releases expired orphan holds; every run, finding and release in the inventory audit trail; report and history in the admin dashboard |
 | **Rooms & inventory** | Rooms, room types, amenities, photographs (validated uploads), operational status (active / maintenance / out of service / retired), search & filters, availability for `[checkIn, checkOut)`, calendar of booked nights, admin inventory views and audit trail |
 | **Dynamic pricing** | Deterministic engine: base × weekend × season × demand (own occupancy), clamped to min/max, per-night breakdown, service fee and tax, `BigDecimal` HALF_UP rounding, versioned immutable policies, price snapshot stored with every booking |
 | **Bookings** | Idempotent creation (`Idempotency-Key`), temporary inventory hold, authoritative price check, payment initiation, saga confirmation via payment events, cancellation policy (100% / 50% / 0%), auditable status history, recovery job for stuck/expired bookings |
@@ -116,12 +120,12 @@ Details (sequence diagrams, state machines, failure handling, deployment): [docs
 
 ## Tests
 
-| Suite | Command | Last verified result (22 Oct 2026) |
+| Suite | Command | Last verified result (23 Oct 2026) |
 |---|---|---|
-| Backend unit + integration + contract (Testcontainers: PostgreSQL, RabbitMQ, Mailpit) | `mvn -B clean verify` | **196 tests**, 0 failures, 0 errors, 0 skipped |
-| Code coverage (JaCoCo, all modules) | `./scripts/coverage-summary.sh` after the build | **86.4 % lines**, 65.8 % branches |
-| Frontend unit + component + accessibility | `npm --prefix frontend test` | **29 tests**, 0 failures (lint, type check and build pass) |
-| End-to-end on the running stack | `./scripts/e2e-smoke.sh` | **56/56** checks (incl. 4 e-mails in Mailpit) |
+| Backend unit + integration + contract (Testcontainers: PostgreSQL, RabbitMQ, Mailpit) | `mvn -B clean verify` | **214 tests**, 0 failures, 0 errors, 0 skipped |
+| Code coverage (JaCoCo, all modules) | `./scripts/coverage-summary.sh` after the build | **88.6 % lines**, 67.7 % branches |
+| Frontend unit + component + accessibility | `npm --prefix frontend test` | **34 tests**, 0 failures (lint, type check and build pass) |
+| End-to-end on the running stack | `./scripts/e2e-smoke.sh` | **70/70** checks (incl. 4 e-mails in Mailpit, hotel portfolio and reconciliation) |
 | Failover (kill gateway, Eureka, booking replica) | `./scripts/failover-demo.sh` | run A 99/100 requests + 4/4 bookings; run B 100/100 + 4/4 |
 | Load (k6, 20 virtual users) + contention | `./scripts/load-test-k6.sh` | search p95 135.9 ms, quote p95 60.8 ms, 0 % errors; 10 parallel bookings of one room → **1 accepted, 9 refused** |
 | Database isolation | `./scripts/verify-db-isolation.sh` | 40/40 |
@@ -149,7 +153,7 @@ grandvista-hospitality/
 │   ├── discovery-server/        Eureka registry (runs as 2 peers)
 │   ├── api-gateway/             Spring Cloud Gateway (runs as 2): routes, JWT, CORS, rate limits, circuit breakers
 │   ├── auth-service/            identity, JWT (RS256 + JWKS), refresh tokens, roles, demo accounts
-│   ├── room-service/            rooms, availability, holds/allocations, dynamic pricing, media
+│   ├── room-service/            hotels, rooms, availability, holds/allocations, pricing, reconciliation, media
 │   ├── booking-service/         reservations + saga, cancellation, recovery, events (runs as 2)
 │   ├── payment-service/         payments: simulated + Razorpay test mode, webhooks, refunds, outbox
 │   └── notification-service/    RabbitMQ consumer, Thymeleaf e-mails, sent-mail log
@@ -240,6 +244,9 @@ More (database, Eureka, routing, events, stuck holds, payments, migrations):
 * **Availability:** Eureka, gateways and booking-service run twice; auth, room, payment, notification, RabbitMQ and
   the databases run once (memory of the demonstration laptop). Rate limits are per gateway instance.
 * **Evidence limits:** performance figures come from one laptop; responsive checks used browser emulation.
+
+* **Portfolio simplifications:** every hotel prices in INR; staff accounts are not restricted to one hotel; the
+  booking-service's cancellation-policy calendar uses one configured time zone (`GV_HOTEL_ZONE`).
 
 **Future work:** Razorpay test-API run and e2e in Razorpay mode · cloud deployment with continuous deployment from CI · real e-mail/SMS provider · shared (Redis) rate limiting · replicas for the remaining services, RabbitMQ
 quorum queues and PostgreSQL replication · OpenTelemetry tracing · room-type inventory and demand forecasting.
