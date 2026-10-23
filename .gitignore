@@ -45,3 +45,6 @@ npm-debug.log*
 
 # Workspace transfer archives (not part of the project)
 .claude-transfer/
+
+# Local Claude Code settings (kept per developer, not in the repo)
+.claude/
