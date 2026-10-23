@@ -39,7 +39,7 @@ stack uses ≈ 3 GB), `openssl`, `curl` and `jq` (for the test scripts).
 
 It creates `.env` (random secrets, never printed, git-ignored) and the JWT key pair if they are missing, builds
 and starts all 23 containers, waits until every one is healthy, and prints the URLs below. The first build takes
-several minutes. Then check the whole platform end to end (56 checks, about a minute):
+several minutes. Then check the whole platform end to end (70 checks, about a minute):
 
 ```bash
 ./scripts/e2e-smoke.sh
@@ -129,7 +129,7 @@ Details (sequence diagrams, state machines, failure handling, deployment): [docs
 | Failover (kill gateway, Eureka, booking replica) | `./scripts/failover-demo.sh` | run A 99/100 requests + 4/4 bookings; run B 100/100 + 4/4 |
 | Load (k6, 20 virtual users) + contention | `./scripts/load-test-k6.sh` | search p95 135.9 ms, quote p95 60.8 ms, 0 % errors; 10 parallel bookings of one room → **1 accepted, 9 refused** |
 | Database isolation | `./scripts/verify-db-isolation.sh` | 40/40 |
-| **GitHub Actions CI** (all of the above except failover/load, on a clean runner) | push to `main` | **green** — [run 39832912584](https://github.com/maheswar-padi/grandvista-hospitality/actions/runs/39832912584): backend 196 tests, coverage 85.9 % lines; frontend 29 tests; full stack + e2e 56/56; DB isolation 40/40 |
+| **GitHub Actions CI** (all of the above except failover/load, on a clean runner) | push to `main` | **green** — [run 39907254564](https://github.com/maheswar-padi/grandvista-hospitality/actions/runs/39907254564) (23 Oct 2026, commit 4e74e35): backend 214 tests, coverage 87.9 % lines / 67.7 % branches; frontend 34 tests; full stack + e2e 70/70; DB isolation 40/40 |
 
 Details and raw outputs: [docs/testing/TESTING.md](docs/testing/TESTING.md), [docs/testing/evidence/](docs/testing/evidence/).
 

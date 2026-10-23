@@ -15,7 +15,7 @@ docker compose up -d --build --wait
 ./scripts/e2e-smoke.sh
 ```
 
-The smoke test (56 checks) proves the stack works and leaves bookings and e-mails for the dashboards. Open these
+The smoke test (70 checks) proves the stack works and leaves bookings and e-mails for the dashboards. Open these
 tabs in advance (credentials are in `.env`; never show the file on screen):
 
 | Tab | URL | Sign-in |
@@ -62,8 +62,8 @@ with Eureka 2), then a booking replica (the gateway retries on the other replica
 messages). Each step makes a complete booking. End on the summary table. Show both Eureka dashboards afterwards.
 
 ### 6. Quality and CI (1 min)
-Show the coverage summary (`./scripts/coverage-summary.sh` after `mvn -B clean verify`: 86.4 % lines) and the
-GitHub Actions run with the CI badge in the README — **only once the workflow has been pushed and is green**.
+Show the coverage summary (`./scripts/coverage-summary.sh` after `mvn -B clean verify`: 88.6 % lines locally, 87.9 % on CI) and the
+GitHub Actions run with the CI badge in the README (latest verified run: 39907254564, all jobs green).
 
 ### Questions to expect
 * *Why can't two people book the same room?* PostgreSQL exclusion constraint + per-room row lock (k6: 10 parallel

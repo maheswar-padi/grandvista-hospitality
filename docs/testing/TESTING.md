@@ -45,17 +45,19 @@ node scripts/load-test.mjs --vus 20 --duration 30 --contenders 10
 ```
 Start the gateway with `GV_API_RATE_LIMIT=1000000 GV_AUTH_RATE_LIMIT=1000` for a throughput run.
 
-## 3. Backend results — `mvn -B clean verify` (22 Oct 2026, final run after Phase 8): **196 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
+## 3. Backend results — `mvn -B clean verify` (23 Oct 2026, after the multi-property and reconciliation work): **214 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**
 
-The baseline (before Phases 1–5) was 148 tests. New classes are marked *(new)*. Per-module totals:
-platform-commons 4, discovery 2, gateway 22, auth 19, room 34, booking 55, payment 52, notification 8.
+The same 214 tests passed on GitHub Actions (run 39907254564). The baseline before Phases 1–5 was 148 tests.
+New classes in this round are marked *(new)*. Per-module totals:
+platform-commons 4, discovery 2, gateway 23, auth 19, room 50, booking 56, payment 52, notification 8.
 
-### Code coverage (JaCoCo, final run)
+### Code coverage (JaCoCo)
 
 Aggregate report over all modules (`coverage/target/site/jacoco-aggregate/index.html`, summary by
-`./scripts/coverage-summary.sh`): **86.4 % of lines (3,871 of 4,479), 65.8 % of branches (952 of 1,447)** (the Phase 5 run measured 86.6 % / 66.0 %; timing-dependent paths vary slightly between runs).
-Per module (own tests only): gateway 93.2 %, auth 90.7 %, booking 85.6 %, room 85.4 %, payment 86.1 %,
-notification 94.1 %, discovery 83.3 % lines. Coverage measures the automated test suite only; the live e2e,
+`./scripts/coverage-summary.sh`): **88.6 % of lines (4,385 of 4,951), 67.7 % of branches (1,125 of 1,661)** locally;
+CI run 39907254564 measured 87.9 % (4,354 of 4,951) / 67.7 % (1,124 of 1,661) — timing-dependent paths vary slightly
+between runs. Per module (own tests only): gateway 93.2 %, auth 90.7 %, booking 85.9 %, room 92.3 %, payment 85.6 %,
+notification 94.3 %, discovery 83.3 % lines. Coverage measures the automated test suite only; the live e2e,
 failover and load tests are not included in it.
 
 | Module | Test class | Tests |
@@ -64,21 +66,24 @@ failover and load tests are not included in it.
 |  | EventTopologyTest | 2 |
 | discovery-server | DiscoveryServerApplicationTests | 2 |
 | api-gateway | GatewayErrorHandlerTest | 10 |
-|  | GatewayIntegrationTest | 12 |
+|  | GatewayIntegrationTest | 13 |
 | auth-service | AuthFlowIntegrationTest | 13 |
 |  | ServiceClientAuthenticatorTest | 3 |
 |  | UserAccountTest | 3 |
 | room-service | CatalogueAdminIntegrationTest | 3 |
 |  | HoldExpirySchedulingIntegrationTest | 3 |
+|  | InventoryReconciliationIntegrationTest *(new)* | 3 |
 |  | MediaStorageTest | 2 |
 |  | PricingEngineTest | 8 |
 |  | PricingPolicyValidationTest | 2 |
+|  | PropertyPortfolioIntegrationTest *(new)* | 4 |
+|  | ReconciliationEngineTest *(new)* | 9 |
 |  | RoomInventoryIntegrationTest | 14 |
 |  | StayDatesTest | 2 |
 | booking-service | BookingMessagingIntegrationTest | 3 |
 |  | BookingRecoverySchedulingTest | 1 |
 |  | BookingRulesTest | 24 |
-|  | BookingSagaIntegrationTest | 20 |
+|  | BookingSagaIntegrationTest | 21 |
 |  | DownstreamContractTest | 7 |
 | payment-service | OutboxRelayContractTest | 3 |
 |  | PaymentFlowIntegrationTest | 15 |
@@ -90,7 +95,7 @@ failover and load tests are not included in it.
 | notification-service | EmailComposerTest | 2 |
 |  | EventContractTest | 2 |
 |  | NotificationFlowIntegrationTest | 4 |
-| **Total** | | **196** |
+| **Total** | | **214** |
 
 ### Scenario coverage (selected)
 
@@ -120,22 +125,24 @@ failover and load tests are not included in it.
 | refunds partial/full, bounded, idempotent | `PaymentFlowIntegrationTest.refundsArePartialOrFullIdempotentAndBounded` |
 | image upload rejects disguised files; media keys can't traverse paths | `RoomInventoryIntegrationTest.imageUploadAcceptsRealImagesAndRejectsDisguisedFiles`, `MediaStorageTest` |
 | pricing formula, weekend/season/demand, clamping, HALF_UP rounding, determinism | `PricingEngineTest` |
+| 3 hotels; search by city and hotel; per-hotel pricing; inactive hotel refuses holds; holds carry the hotel | `PropertyPortfolioIntegrationTest` |
+| reconciliation finds all 5 mismatch types, releases only expired orphan holds, logs each finding once, survives a booking-service outage | `ReconciliationEngineTest`, `InventoryReconciliationIntegrationTest` |
 
-## 4. Frontend results — 22 Oct 2026
+## 4. Frontend results — 23 Oct 2026
 
 | Check | Result |
 |---|---|
 | `npm run lint` (ESLint incl. a rule forbidding `dangerouslySetInnerHTML`) | passed |
 | `npm run typecheck` | passed |
-| `npm test` (Vitest) | **24 tests, 3 files, all passed** — `lib.test.ts` 9, `components.test.tsx` 11, `account.test.tsx` 4 |
+| `npm test` (Vitest) | **34 tests, 5 files, all passed** — `lib.test.ts` 9, `components.test.tsx` 11, `account.test.tsx` 4, `payment.test.tsx` 5, `portfolio.test.tsx` 5 |
 | `npm run build` | passed (route-level code splitting; charts in a separate lazy chunk) |
-| Accessibility | axe-core: no serious/critical violations on price breakdown, room card, sign-in page, confirmation page (colour contrast checked separately by design tokens) |
+| Accessibility | axe-core: no serious/critical violations on price breakdown, room card, sign-in page, confirmation page, payment page, destination search bar, reconciliation page (colour contrast checked separately by design tokens) |
 
 ## 5. Live-stack results (Docker Compose)
 
 | Run | Command | Result | Evidence |
 |---|---|---|---|
-| End-to-end, final build (22 Oct) | `./scripts/e2e-smoke.sh` | **52 passed, 0 failed** | [evidence/e2e-smoke.txt](evidence/e2e-smoke.txt) |
+| End-to-end, multi-property build (23 Oct) | `./scripts/e2e-smoke.sh` | **70 passed, 0 failed** (incl. hotel portfolio §1b and a live reconciliation run §11) | [evidence/e2e-smoke.txt](evidence/e2e-smoke.txt) |
 | End-to-end with **two room-service instances** (22 Oct) | same | 52 passed, 0 failed | [evidence/load-balancing.txt](evidence/load-balancing.txt) |
 | Consistency audit (22 Oct) | `node scripts/consistency-audit.mjs --rounds 5` (gateway auth limit raised to 1000/min for the run, restored afterwards) | **AUDIT PASSED — 18 checks** | [evidence/consistency-audit.txt](evidence/consistency-audit.txt) |
 | Load test (21 Oct) | `node scripts/load-test.mjs --vus 20 --duration 30 --contenders 10` (limits raised for the run, restored afterwards) | see below | [evidence/load-test.txt](evidence/load-test.txt) |

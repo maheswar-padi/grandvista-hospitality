@@ -74,7 +74,7 @@ Other useful commands: `./scripts/failover-demo.sh` (kills instances while booki
 
 | Check | Result |
 |---|---|
-| GitHub Actions CI (first run 39832912584, clean runner) | **all jobs green**, ~15 min |
+| GitHub Actions CI (run 39907254564, clean runner) | **all jobs green**, ~9 min: 214 backend tests (87.9 % lines), 34 frontend tests, e2e 70/70 |
 | Backend tests (unit, integration with real PostgreSQL/RabbitMQ/Mailpit) | **214 tests, 0 failures** |
 | Code coverage (JaCoCo, local 23 Oct) | **88.6 % of lines, 67.7 % of branches** |
 | Frontend (lint, types, tests incl. accessibility, build) | **34 tests**, all passing |

@@ -3,17 +3,17 @@
 `[x]` = done **and** verified by the evidence named · `[~]` = implemented, not fully verified · `[ ]` = not done.
 Last updated 23 October 2026. Full results: [docs/testing/TESTING.md](testing/TESTING.md).
 
-## Backend (verified: `mvn -B clean verify` — 148 tests, 0 failures, 0 errors, 0 skipped; Testcontainers PostgreSQL 16)
+## Backend (verified: `mvn -B clean verify` — 214 tests, 0 failures, 0 errors, 0 skipped; Testcontainers PostgreSQL 16, RabbitMQ, Mailpit)
 - [x] platform-commons (correlation IDs, RFC 9457 errors, JWT wiring, service clients, retry, Specs) — 6 tests
 - [x] discovery-server (Eureka, HTTP Basic) — 2 tests
-- [x] api-gateway (routes, JWT pre-check, CORS, rate limit, size limit, problem errors) — 9 tests
-- [x] auth-service (RS256/JWKS, rotating refresh cookie + reuse detection, lockout, roles, service tokens) — 17 tests
-- [x] room-service (search, availability, pricing engine, holds, exclusion constraint, scheduled hold sweeper, media, admin) — 31 tests
-- [x] booking-service (saga, idempotency, cancellation policy, scheduled recovery job, inbox, history, timeouts) — 45 tests
-- [x] payment-service (state machine, simulated provider, webhooks incl. concurrent duplicates, refunds, outbox, reconciliation) — 38 tests
+- [x] api-gateway (routes, JWT pre-check, CORS, rate limit, size limit, problem errors, circuit breakers) — 23 tests
+- [x] auth-service (RS256/JWKS, rotating refresh cookie + reuse detection, lockout, roles, service tokens) — 19 tests
+- [x] room-service (hotels, search, availability, pricing engine, holds, exclusion constraint, scheduled hold sweeper, media, admin, stock reconciliation) — 50 tests
+- [x] booking-service (saga, idempotency, cancellation policy, scheduled recovery job, inbox, history, timeouts, reconciliation lookups) — 56 tests
+- [x] payment-service (state machine, simulated provider, Razorpay test mode, webhooks incl. concurrent duplicates, refunds, outbox, reconciliation) — 52 tests
 - [x] Contracts verified provider + consumer side (`/contracts`)
 
-## Frontend (verified: lint, typecheck, build, Vitest 24 tests incl. axe checks)
+## Frontend (verified: lint, typecheck, build, Vitest 34 tests incl. axe checks)
 - [x] All customer pages and admin dashboard implemented and integrated with the real API
 - [x] Browser-verified on the Docker stack: search → details/quote → register → checkout → async simulated
       payment → live confirmation → dashboard; admin overview + rooms/pricing/bookings/payments/users
@@ -43,7 +43,7 @@ Last updated 23 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Message broker and e-mail (Phase 2, 22 Oct 2026)
 - [x] RabbitMQ events with outboxes, publisher confirms, DLQs and idempotent consumers (real-broker tests)
-- [x] notification-service + Mailpit; e-mails verified by `NotificationFlowIntegrationTest` and e2e (56/56)
+- [x] notification-service + Mailpit; e-mails verified by `NotificationFlowIntegrationTest` and e2e (now 70/70)
 
 ## Payments (Phase 3, 22 Oct 2026)
 - [x] Gateway selection `GV_PAYMENT_PROVIDER` (simulated default)
@@ -55,7 +55,7 @@ Last updated 23 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Security and quality (Phase 5, 22 Oct 2026)
 - [x] Request-DTO validation scan; fixed silent account disabling on empty status body
-- [x] JaCoCo: 86.4 % lines / 65.8 % branches aggregate, 196 backend tests; frontend 29 tests incl. axe on payment page
+- [x] JaCoCo: 88.6 % lines / 67.7 % branches aggregate (local, 23 Oct), 214 backend tests; frontend 34 tests incl. axe on payment page
 - [x] Optional Prometheus + Grafana profile; payment page re-checked live at 375 px (no overflow)
 
 ## Report, demo and polish (Phase 8, 22 Oct 2026)
@@ -63,7 +63,7 @@ Last updated 23 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [x] Report title page: name, Team Members table, Review Schedule (23 Oct 2026)
 - [x] Team table: KOONI BHAVYA SREE (Team Lead), CHUNCHU PURVI SATHVIKA, PADI SESHA MAHESWARA RAO (names and roles)
 - [ ] Department, guide, academic year, review dates, institutional pages, screenshots (need the team)
-- [x] GitHub repository (public) + CI green (run 39832912584) + badge
+- [x] GitHub repository (public) + CI green (latest run 39907254564: 214 + 34 tests, e2e 70/70) + badge
 - [ ] Razorpay test keys; cloud account + domain (need the student)
 
 ## Multi-property and stock reconciliation (23 Oct 2026)

@@ -485,7 +485,7 @@ inspection). Code coverage is measured with JaCoCo.
 | Contention (k6: 10 customers book the same room at once) | **1 accepted, 9 refused (409)**, 0 unexpected |
 | Consistency audit (earlier phase) | 10-way race → 1 booking; duplicate submissions → 1 booking; 5 concurrent payment confirmations → 1 authorisation |
 | Production overlay over HTTPS (local, `GV_DOMAIN=localhost`) | smoke test 52/52 (e-mail checks skipped) |
-| GitHub Actions CI on a clean runner (run 39832912584) | green: 196 backend tests, 85.9 % lines / 65.9 % branches, 29 frontend tests, e2e 56/56, isolation 40/40 |
+| GitHub Actions CI on a clean runner (run 39907254564, 23 Oct, commit 4e74e35) | green in about 9 minutes: 214 backend tests, 87.9 % lines (4 354 / 4 951) / 67.7 % branches (1 124 / 1 661), 34 frontend tests, `npm audit` 0 vulnerabilities, e2e 70/70, isolation 40/40 |
 | Responsive inspection | 375, 390, 430, 768, 1024, 1440 px (Chromium emulation); payment page re-checked at 375 px after Phase 3 |
 
 An earlier load test with a Node.js script and no think time measured 1 119 req/s (search + quote, one gateway);
@@ -517,10 +517,11 @@ smoke-tests it on a single VM. The recommended free target is an Oracle Cloud Al
 The overlay was tested locally over HTTPS; **no cloud deployment was performed** (no cloud account was available).
 
 **CI.** A GitHub Actions workflow builds and tests the backend with coverage, checks the frontend, builds the images,
-starts the full stack and runs the smoke test. First run on GitHub (23 Oct 2026, private repository
-`maheswar-padi/grandvista-hospitality`, run 39832912584, commit 51bfc04): **all jobs green in about 15 minutes** —
-backend 196 tests with 0 failures and 85.9 % line / 65.9 % branch coverage, frontend 29 tests, all images built,
-the full stack started on a clean runner, end-to-end smoke test 56/56 and database isolation 40/40.
+starts the full stack and runs the smoke test. CI has been green since the first run on GitHub (23 Oct 2026). Latest
+verified run, after the multi-property and reconciliation work (public repository
+`maheswar-padi/grandvista-hospitality`, run 39907254564, commit 4e74e35): **all jobs green in about 9 minutes** —
+backend 214 tests with 0 failures and 87.9 % line / 67.7 % branch coverage, frontend 34 tests, all images built,
+the full stack started on a clean runner, end-to-end smoke test 70/70 and database isolation 40/40.
 
 ## 23. Security considerations
 
