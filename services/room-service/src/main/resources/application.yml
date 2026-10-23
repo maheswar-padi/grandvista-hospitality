@@ -61,6 +61,17 @@ gv:
     quote-validity: 15m
   inventory:
     hold-sweep-interval: 30s
+    reconciliation:
+      enabled: ${GV_RECONCILIATION_ENABLED:true}
+      interval: ${GV_RECONCILIATION_INTERVAL:10m}
+      initial-delay: ${GV_RECONCILIATION_INITIAL_DELAY:2m}
+      grace: 2m
+      booking-service-url: http://booking-service
+      http-timeout: 5s
+  service-auth:
+    token-uri: ${GV_SERVICE_TOKEN_URI:http://auth-service/internal/v1/service-tokens}
+    client-id: room-service
+    client-secret: ${ROOM_SERVICE_CLIENT_SECRET:}
   media:
     local-root: ${GV_MEDIA_ROOT:./var/media}
     max-image-size: 5MB

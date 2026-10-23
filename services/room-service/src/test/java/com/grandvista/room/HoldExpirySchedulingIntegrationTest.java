@@ -43,6 +43,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  */
 @SpringBootTest(properties = {"eureka.client.enabled=false", "gv.demo.seed-enabled=false",
         "gv.media.local-root=target/test-media", "gv.security.jwt.jwk-set-uri=http://localhost:1/unused",
+        "gv.inventory.reconciliation.enabled=false",
         "gv.inventory.hold-sweep-interval=300ms", "gv.inventory.hold-sweep-initial-delay=0s"})
 @AutoConfigureMockMvc
 @Import(TestSupport.class)

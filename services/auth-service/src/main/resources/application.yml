@@ -75,6 +75,8 @@ gv:
         client-secret: ${BOOKING_SERVICE_CLIENT_SECRET:}
       - client-id: payment-service
         client-secret: ${PAYMENT_SERVICE_CLIENT_SECRET:}
+      - client-id: room-service
+        client-secret: ${ROOM_SERVICE_CLIENT_SECRET:}
 
 springdoc:
   api-docs:

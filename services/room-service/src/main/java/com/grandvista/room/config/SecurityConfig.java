@@ -34,6 +34,7 @@ public class SecurityConfig {
                                 "/api/v1/amenities/**", "/api/v1/media/**").permitAll()
                         .requestMatchers("/internal/**").hasRole(Roles.SERVICE)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/admin/rooms/*/status").hasAnyRole(Roles.ADMIN, Roles.STAFF)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/inventory/reconciliation/run").hasAnyRole(Roles.ADMIN, Roles.STAFF)
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/**").hasAnyRole(Roles.ADMIN, Roles.STAFF)
                         .requestMatchers("/api/v1/admin/**").hasRole(Roles.ADMIN)
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()

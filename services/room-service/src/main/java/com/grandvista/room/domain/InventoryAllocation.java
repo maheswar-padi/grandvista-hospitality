@@ -170,6 +170,10 @@ public class InventoryAllocation {
         return priceQuote;
     }
 
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

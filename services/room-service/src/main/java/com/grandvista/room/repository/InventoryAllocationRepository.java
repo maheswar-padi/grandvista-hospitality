@@ -4,6 +4,7 @@ import com.grandvista.room.domain.InventoryAllocation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,6 +50,17 @@ public interface InventoryAllocationRepository extends JpaRepository<InventoryAl
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
     List<InventoryAllocation> findDueHoldsSkipLocked(Instant now, int limit);
+
+    /** HELD or CONFIRMED allocations of these rooms whose stay has not ended (reconciliation input). */
+    @Query("""
+            select a from InventoryAllocation a
+            where a.roomId in :roomIds and a.checkOut > :today
+              and a.status in (com.grandvista.room.domain.AllocationStatus.HELD,
+                               com.grandvista.room.domain.AllocationStatus.CONFIRMED)
+            """)
+    List<InventoryAllocation> findActiveForRooms(Collection<UUID> roomIds, LocalDate today);
+
+    List<InventoryAllocation> findAllByBookingIdIn(Collection<UUID> bookingIds);
 
     @Query("""
             select count(a) from InventoryAllocation a

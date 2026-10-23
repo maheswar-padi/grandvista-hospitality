@@ -216,6 +216,7 @@ services:
       GV_DEMO_STAFF_PASSWORD: ${GV_DEMO_STAFF_PASSWORD:-}
       BOOKING_SERVICE_CLIENT_SECRET: ${BOOKING_SERVICE_CLIENT_SECRET:?missing}
       PAYMENT_SERVICE_CLIENT_SECRET: ${PAYMENT_SERVICE_CLIENT_SECRET:?missing}
+      ROOM_SERVICE_CLIENT_SECRET: ${ROOM_SERVICE_CLIENT_SECRET:?missing}
     volumes:
       - ./infrastructure/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
       - ./infrastructure/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro
@@ -237,6 +238,8 @@ services:
       GV_MEDIA_ROOT: /app/var/media
       GV_DEMO_SEED_ENABLED: ${GV_DEMO_SEED_ENABLED:-true}
       GV_HOLD_TTL: ${GV_HOLD_TTL:-15m}
+      ROOM_SERVICE_CLIENT_SECRET: ${ROOM_SERVICE_CLIENT_SECRET}
+      GV_RECONCILIATION_INTERVAL: ${GV_RECONCILIATION_INTERVAL:-10m}
     volumes:
       - room-media:/app/var/media
 

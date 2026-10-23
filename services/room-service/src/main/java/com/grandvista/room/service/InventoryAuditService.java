@@ -29,7 +29,7 @@ public class InventoryAuditService {
     }
 
     /** "user:&lt;id&gt;", "service:&lt;name&gt;" or "system" for scheduled jobs. */
-    static String currentActor() {
+    public static String currentActor() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return "system";

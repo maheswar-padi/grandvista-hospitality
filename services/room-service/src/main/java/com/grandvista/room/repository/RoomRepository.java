@@ -42,4 +42,14 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
 
     long countByStatus(RoomStatus status);
 
+
+    /** Room id and number for every room of a property (reconciliation input). */
+    @Query("select r.id as id, r.roomNumber as roomNumber from Room r where r.property.id = :propertyId")
+    List<RoomNumber> findRoomNumbersByPropertyId(UUID propertyId);
+
+    interface RoomNumber {
+        UUID getId();
+
+        String getRoomNumber();
+    }
 }

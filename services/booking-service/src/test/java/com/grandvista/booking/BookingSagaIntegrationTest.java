@@ -574,4 +574,29 @@ class BookingSagaIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT refund_amount FROM bookings WHERE id = ?", BigDecimal.class, id))
                 .isEqualByComparingTo("10584.00");
     }
+
+    @Test
+    void reconciliationLookupsReturnBookingFactsToServicesOnly() throws Exception {
+        UUID id = UUID.fromString(createOk("key-lookup-1").get("id").asText());
+        UUID unknown = UUID.randomUUID();
+        String lookup = "{\"bookingIds\":[\"" + id + "\",\"" + unknown + "\"]}";
+        mvc.perform(post("/internal/v1/bookings/lookup").with(customer(customerId)).contentType(MediaType.APPLICATION_JSON)
+                .content(lookup)).andExpect(status().isForbidden());
+        mvc.perform(post("/internal/v1/bookings/lookup").with(service()).contentType(MediaType.APPLICATION_JSON).content(lookup))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].bookingId").value(id.toString()))
+                .andExpect(jsonPath("$[0].status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$[0].propertyId").value(PROPERTY_ID.toString()))
+                .andExpect(jsonPath("$[0].roomId").value(roomId.toString()));
+
+        String holding = "{\"roomIds\":[\"" + roomId + "\"],\"checkOutFrom\":\"" + checkIn.minusDays(1) + "\"}";
+        mvc.perform(post("/internal/v1/bookings/holding-inventory").with(service()).contentType(MediaType.APPLICATION_JSON)
+                        .content(holding))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].bookingId").value(org.hamcrest.Matchers.hasItem(id.toString())));
+        mvc.perform(post("/internal/v1/bookings/holding-inventory").with(service()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roomIds\":[\"" + UUID.randomUUID() + "\"],\"checkOutFrom\":\"" + checkIn + "\"}"))
+                .andExpect(jsonPath("$.length()").value(0));
+    }
 }

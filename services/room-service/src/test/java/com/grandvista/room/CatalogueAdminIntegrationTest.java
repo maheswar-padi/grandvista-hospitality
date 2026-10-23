@@ -31,7 +31,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * seeder enabled so its start-up run is part of the test.
  */
 @SpringBootTest(properties = {"eureka.client.enabled=false", "gv.demo.seed-enabled=true",
-        "gv.media.local-root=target/test-media-admin", "gv.security.jwt.jwk-set-uri=http://localhost:1/unused"})
+        "gv.media.local-root=target/test-media-admin", "gv.security.jwt.jwk-set-uri=http://localhost:1/unused",
+        "gv.inventory.reconciliation.enabled=false"})
 @AutoConfigureMockMvc
 @Import(TestSupport.class)
 @Testcontainers(disabledWithoutDocker = true)

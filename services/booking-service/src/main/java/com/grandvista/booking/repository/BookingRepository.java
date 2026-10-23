@@ -50,6 +50,11 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     @Query("select count(b) from Booking b where b.status = :status and b.checkIn = :date")
     long countByStatusOnCheckInDate(BookingStatus status, LocalDate date);
 
+    /** Bookings that should hold inventory on these rooms, staying on or after {@code checkOutFrom}. */
+    @Query("select b from Booking b where b.roomId in :roomIds and b.status in :statuses and b.checkOut > :checkOutFrom")
+    java.util.List<Booking> findHoldingInventory(java.util.Collection<UUID> roomIds,
+            java.util.Collection<com.grandvista.booking.domain.BookingStatus> statuses, java.time.LocalDate checkOutFrom);
+
     interface StatusCount {
         BookingStatus getStatus();
 
