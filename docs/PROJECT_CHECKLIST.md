@@ -60,7 +60,8 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 
 ## Report, demo and polish (Phase 8, 22 Oct 2026)
 - [x] k6 load test (evidence/k6-output.txt), diagrams PNG, report/README/demo script/traceability updated
-- [ ] Student details, institutional pages and screenshots in the report (need the student)
+- [x] Report title page: name, Team Members table, Review Schedule (23 Oct 2026)
+- [ ] Register numbers, members 2–3, department, guide, academic year, review dates, institutional pages, screenshots (need the team)
 - [x] GitHub repository (private) + CI green (run 39832912584) + badge
 - [ ] Razorpay test keys; cloud account + domain (need the student)
 
@@ -81,7 +82,6 @@ Last updated 22 October 2026. Full results: [docs/testing/TESTING.md](testing/TE
 - [x] docs/DEMO_SCRIPT.md · docs/TRACEABILITY_MATRIX.md · docs/project-report/PROJECT_REPORT.md
 
 ## Not done / limitations
-- Razorpay not run against the real test API (needs keys) · cloud deployment (none performed) · CI workflow never run on GitHub ·
+- Razorpay not run against the real test API (needs keys) · cloud deployment (none performed) ·
   in-memory gateway rate limiting (per instance) · single instances of auth/room/payment/notification, RabbitMQ, DBs ·
-  e-mails captured by Mailpit only (no real provider) · responsive checks by emulation only ·
-  not yet pushed to a remote
+  e-mails captured by Mailpit only (no real provider) · responsive checks by emulation only

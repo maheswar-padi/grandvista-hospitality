@@ -5,6 +5,17 @@ Each entry lists only what was actually changed and verified.
 
 ## [Unreleased]
 
+### Public release and team overview (23 Oct 2026)
+- **Security:** full-history scan before publishing found 10 expired JWT access tokens of throwaway k6 test
+  customers in `docs/testing/evidence/k6-summary.json` (local issuer, CUSTOMER role, expired 22 Oct 16:22 UTC). Removed
+  from every commit (only `setup_data.tokens`; k6 metrics kept), force-pushed while still private, and the k6
+  script now never writes tokens. Re-scan: no JWTs, `.env` values, keys or tokens in any commit.
+- **Changed:** repository made **public**; README, badge (passing) and architecture image verified for a signed-out
+  visitor.
+- **Changed:** report title page — student name, Team Members table (members 2–3 to be completed), Review Schedule
+  (Review 1, Review 2, Final Review; dates to be completed) replacing the submission date.
+- **Added:** `docs/TEAM_OVERVIEW.md` and `docs/TEAM_OVERVIEW.pdf` (3 pages) for teammates.
+
 ### CI on GitHub (23 Oct 2026)
 - **Changed:** repository published privately at `maheswar-padi/grandvista-hospitality`; commit author set to
   PADI SESHA MAHESWARA RAO (GitHub no-reply e-mail) for this repository and rewritten on the unpublished history;

@@ -6,17 +6,31 @@
 |---|---|
 | Project code | PS016 |
 | Institution | K L University (Koneru Lakshmaiah Education Foundation) |
-| Student name(s) | `[to be completed by the student]` |
-| Register number(s) | `[to be completed]` |
 | Department | `[to be completed]` |
 | Section / batch | `[to be completed]` |
 | Faculty guide | `[to be completed]` |
 | Academic year | `[to be completed]` |
-| Date of submission | `[to be completed]` |
+
+### Team Members
+
+| # | Name | Register number |
+|---|---|---|
+| 1 | PADI SESHA MAHESWARA RAO | `[to be completed]` |
+| 2 | `[Member 2]` | `[to be completed]` |
+| 3 | `[Member 3]` | `[to be completed]` |
+
+### Review Schedule
+
+| Review | Date |
+|---|---|
+| Review 1 | `[to be completed]` |
+| Review 2 | `[to be completed]` |
+| Final Review | `[to be completed]` |
 
 > Note on this document: it describes the software as implemented and tested in the accompanying repository.
 > No approvals, signatures, certificates, faculty remarks or deployment evidence are claimed. Places where the
-> student must add institutional details or screenshots are marked `[to be completed]` / `[Screenshot: …]`.
+> team must add institutional details, team members or screenshots are marked `[to be completed]`, `[Member n]` or
+> `[Screenshot: …]`.
 
 ---
 

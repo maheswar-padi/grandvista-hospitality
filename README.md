@@ -1,6 +1,7 @@
 # GrandVista Hospitality — Inventory Control & Dynamic Room Reservation Platform
 
 > University project **PS016** · SOA Programming and Microservices (**24SDCS03R**) · K L University
+>
 > GrandVista is a **fictional** hotel. Payments use a **simulated** provider (or Razorpay **test mode**) — no real
 > money is ever moved.
 
